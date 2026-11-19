@@ -16,6 +16,8 @@ npm run dev          # client (http://localhost:5174) + server (:2568) together;
 npm test             # vitest for /shared, then the server room tests
 npm run typecheck    # tsc for shared + client + server
 npm run build        # client/dist (static) + server/dist/index.js (single esbuild bundle)
+npm run sim -- --bots usor,mediu,greu,greu --rounds 5 --seed abc -v   # headless bots-only match, prints rounds + standings
+npm run balance -w shared -- --matches 40 --lineup usor,usor,mediu,mediu,greu,greu   # bot tournament stats per level
 ```
 
 Single test file / test name:
@@ -37,6 +39,10 @@ Server room tests boot a real server on port 2569 (not 2568, which is the dev/pr
 - Fixed tick: 30/s (`TICK_RATE`). The same `runTick`/`step()` runs in `LocalTransport`, in client-side prediction and on the server.
 - State is flat (players as `Record<id, PlayerState>`, plain arrays) so it maps onto `@colyseus/schema`. A new state field must be added to the schema, the mirror and the client's state rebuild.
 - Input per tick: `{ seq, steer, throttle, boost }` (`steer`/`throttle` integers in -100..100, boost latched until the next tick).
+- Modules: `fixed.ts` (angle steps `ANGLE_STEPS` = 1024, literal quarter-wave sine table scaled by `TRIG_ONE`, `isin`/`icos`/`iatan2`/`isqrt`/`idiv` (never returns -0, so states survive JSON unchanged), `hash32`/`percent` for bot rolls); `constants.ts` (all tuning: speeds, grip, boost, mass, ring, timings, scoring); `physics.ts` (`driveCar`: steer/throttle/boost/friction/grip, lower grip for `slideTicks` after being hit; `collide`: disc–disc impulse with mass (boosting = heavier) and restitution, positional separation, knockout credit via `lastHitBy`/`lastHitTick`; `isOutside`); `sim.ts` (`applyInput`, `step`, countdown, ring shrink `ringRadiusAt`, eliminations and scoring, round end: one left = win +3, none left = draw, 90 s = timeout); `match.ts` (lobby/round/match lifecycle as in Bombe: `createGameState`, `addPlayer`, `addBot`, `startMatch`, `startRound` (seeded rotation of the spawn circle), `leavePlayer`, `backToLobby`, standings); `bot.ts`; `runner.ts` (`runTick` = inputs + bot decisions + `step`, `skipBotRound`); `protocol.ts` (wire contract, `INPUT_QUEUE_MAX`).
+- Players are always iterated with `sortedPlayers` (slot order) and collision pairs in that order: never depend on object key order.
+- **Bots** (`BOT_PARAMS` per level: decision interval, aggression, edge margin + lookahead, boost range/alignment, escape boost, mistakes, aim noise). `botThink` is pure (rolls are hashes of `state.rng`, round, decision index, slot; it never advances the RNG), `botAct` returns an input only on decision ticks and the held input carries the bot in between. Retune against `test/balance.test.ts` and `npm run balance`.
+- `test/sourceRules.test.ts` greps the source for banned APIs (`Date.now`, `Math.random`, float trig, `**`) and for bitwise operators outside `rng.ts`/`fixed.ts`/`roomCode.ts`. Tests build races with `makeRace` in `test/helpers.ts` (cars placed exactly, first fighting tick next).
 
 ### Netcode (stage 4)
 - Server is authoritative and sends patches at 30/s (every state carries its `tick`, and each player's last processed input `seq`).
@@ -62,7 +68,7 @@ Scenes read state and send messages only through `GameTransport` (`LocalTranspor
 
 ## Plan
 0. Repo + monorepo + CLAUDE.md — done.
-1. `/shared`: physics, ring, scoring, rounds, bots + tests (determinism, collisions).
+1. `/shared`: physics, ring, scoring, rounds, bots + tests (determinism, collisions) — done.
 2. Rendering + LocalTransport + keyboard/touch controls.
 3. Menus and lobby (from Bombe și Petarde).
 4. Colyseus server + ColyseusTransport with prediction/reconciliation; simulated lag test (100–150 ms), incl. convergence after a collision.
