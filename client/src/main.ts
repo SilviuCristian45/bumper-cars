@@ -1,27 +1,31 @@
 import Phaser from 'phaser';
 import './style.css';
-import { DEFAULT_ROUNDS, MAX_PLAYERS, ROUND_OPTIONS } from '@masinute/shared';
+import './screens.css';
+import { DEFAULT_ROUNDS, isValidRoomCode, MAX_PLAYERS, normalizeRoomCode, ROUND_OPTIONS } from '@masinute/shared';
 import { parseBotLevel } from './botLevels';
-import { restoreTuning } from './debug/TunePanel';
 import { isTouch } from './device';
 import { LocalTransport } from './net/LocalTransport';
 import { GAME_H, GAME_W } from './render/layout';
 import { GameScene, type GameSceneData } from './scenes/GameScene';
+import { IntroScene } from './scenes/IntroScene';
+import { LobbyScene } from './scenes/LobbyScene';
+import { MenuScene, type MenuSceneData } from './scenes/MenuScene';
+import { NameScene } from './scenes/NameScene';
+import { initChrome } from './ui/chrome';
+import { trackVisualViewport } from './ui/dom';
 import { initRotatePrompt } from './ui/orientation';
 
 const params = new URLSearchParams(window.location.search);
 
-// Until the menus arrive (stage 3) every visit starts a local match against bots. Test options:
+// Test URL options skip the intro and menu and start a local match at once:
 // ?debug, ?bots=1..5 (default 3), ?rounds=3|5|7, ?seed=abc, ?botlevel=usor|mediu|greu,
-// ?touch / ?touch=0 (device.ts), ?tune (driving-feel sliders, local games only).
+// ?tune (driving-feel sliders). ?touch / ?touch=0 only force the layout (device.ts).
+const quick = ['debug', 'bots', 'rounds', 'seed', 'botlevel', 'tune'].some((key) => params.has(key));
 const tune = params.has('tune');
-if (tune) {
-  restoreTuning();
-  // The panel gets its own column on wide screens, so it never covers the scores.
-  document.body.classList.add('tuning');
-}
+// The panel gets its own column on wide screens, so it never covers the scores.
+if (tune) document.body.classList.add('tuning');
 
-function localMatch(): GameSceneData {
+function quickStart(): GameSceneData {
   const bots = Phaser.Math.Clamp(Number(params.get('bots') ?? 3) || 3, 1, MAX_PLAYERS - 1);
   const rounds = Number(params.get('rounds'));
   return {
@@ -35,14 +39,24 @@ function localMatch(): GameSceneData {
     }),
     debug: params.has('debug'),
     tune,
-    newMatch: localMatch,
+    newMatch: quickStart,
   };
 }
 
-// Phones: no long-press menu (the CSS already stops selection and the callout).
+// ?room=COD (invite link): after the intro and the nickname, the menu joins that room.
+function menuData(): MenuSceneData {
+  const room = params.get('room');
+  if (room === null) return {};
+  const code = normalizeRoomCode(room);
+  return isValidRoomCode(code) ? { invite: code } : { message: 'Codul din link nu e valid.' };
+}
+
+// Phones: no long-press menu (the CSS already stops selection and the callout); text fields keep theirs.
 if (isTouch) {
   document.body.classList.add('touch');
-  document.addEventListener('contextmenu', (e) => e.preventDefault());
+  document.addEventListener('contextmenu', (e) => {
+    if (!(e.target instanceof HTMLInputElement)) e.preventDefault();
+  });
 }
 
 const game = new Phaser.Game({
@@ -55,5 +69,12 @@ const game = new Phaser.Game({
   // The canvas only sees one finger at a time (overlay taps); the HTML touch controls track their own.
   input: { activePointers: 1 },
 });
+// HTML layers over the canvas: the fullscreen icon and the rotate prompt (toasts and dialogs come and go).
+initChrome();
 initRotatePrompt();
-game.scene.add('game', GameScene, true, localMatch());
+trackVisualViewport();
+game.scene.add('intro', IntroScene, !quick, menuData());
+game.scene.add('name', NameScene);
+game.scene.add('menu', MenuScene);
+game.scene.add('lobby', LobbyScene);
+game.scene.add('game', GameScene, quick, quick ? quickStart() : undefined);

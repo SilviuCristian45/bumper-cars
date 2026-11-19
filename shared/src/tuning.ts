@@ -57,3 +57,21 @@ export function setTuning(values: Partial<Tuning>): void {
     if (typeof v === 'number' && Number.isInteger(v)) TUNING[key] = v;
   }
 }
+
+export interface GameTuningOptions {
+  /** A room on the server: client and server must step with the same numbers. */
+  online: boolean;
+  /** ?tune in the URL. */
+  tune: boolean;
+  /** Values an earlier ?tune session saved in this browser (null when there are none). */
+  saved: Partial<Tuning> | null;
+}
+
+/**
+ * Called whenever a game starts. Every game starts from DEFAULT_TUNING; the saved ?tune values
+ * are applied on top only for a local game with ?tune in the URL. Online they never apply.
+ */
+export function applyGameTuning(opts: GameTuningOptions): void {
+  setTuning(DEFAULT_TUNING);
+  if (!opts.online && opts.tune && opts.saved) setTuning(opts.saved);
+}

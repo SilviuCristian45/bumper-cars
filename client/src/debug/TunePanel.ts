@@ -40,13 +40,13 @@ const SPECS: Spec[] = [
 
 const STORAGE_KEY = 'tune';
 
-/** Restores the values saved by an earlier ?tune session in this browser. */
-export function restoreTuning(): void {
+/** The values saved by an earlier ?tune session in this browser (applied by applyGameTuning). */
+export function savedTuning(): Partial<Tuning> | null {
   try {
     const saved = load(STORAGE_KEY);
-    if (saved) setTuning(JSON.parse(saved) as Partial<Tuning>);
+    return saved ? (JSON.parse(saved) as Partial<Tuning>) : null;
   } catch {
-    // ignore a corrupt entry
+    return null; // ignore a corrupt entry
   }
 }
 

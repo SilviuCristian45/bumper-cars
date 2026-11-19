@@ -7,6 +7,7 @@ import {
   PLAYER_COLORS,
   TICK_RATE,
   angleDiff,
+  applyGameTuning,
   computeStandings,
   countdownSeconds,
   fightTicks,
@@ -14,7 +15,8 @@ import {
   type GameState,
 } from '@masinute/shared';
 import { DebugOverlay } from '../debug/DebugOverlay';
-import { TunePanel } from '../debug/TunePanel';
+import { savedTuning, TunePanel } from '../debug/TunePanel';
+import { keepScreenOn } from '../device-apis';
 import { isTouch } from '../device';
 import { CombinedInput } from '../input/CombinedInput';
 import { NO_INPUT } from '../input/InputSource';
@@ -25,17 +27,25 @@ import { Arena } from '../render/Arena';
 import { CarView } from '../render/CarView';
 import { bumpSparks, boostPuff, outBurst } from '../render/fx';
 import { Hud } from '../render/Hud';
-import { ARENA_CX, ARENA_CY, ARENA_R, DEPTH, FONT, toScreenX, toScreenY } from '../render/layout';
+import { ARENA_CX, ARENA_CY, ARENA_R, DEPTH, FONT, GAME_H, GAME_W, HUD_X, SIDE_W, TOUCH_LAYOUT, toScreenX, toScreenY } from '../render/layout';
 import { ensureTextures } from '../render/textures';
 import { getSetting, reducedEffects, vibrate } from '../settings';
+import { ConnectionBanner } from '../ui/ConnectionBanner';
+import { openDialog, type Dialog } from '../ui/dialog';
+import { button, el, useScaleMode } from '../ui/dom';
+import { fullscreenOnFirstTap } from '../ui/fullscreen';
 import { requireLandscape } from '../ui/orientation';
+import { notifyPresence } from '../ui/presence';
+import { TextButton } from '../ui/TextButton';
+import type { LobbySceneData } from './LobbyScene';
+import type { MenuSceneData } from './MenuScene';
 
 export interface GameSceneData {
   transport: GameTransport;
   debug: boolean;
-  /** Show the ?tune panel (local games only). */
+  /** ?tune: the saved values and the panel (local games only). */
   tune: boolean;
-  /** Started from test URL options: after the match, Enter (or a tap) starts a new one. */
+  /** Started from test URL options: after the match, Enter (or a tap) starts a new one instead of going back to the lobby. */
   newMatch?: () => GameSceneData;
 }
 
@@ -60,6 +70,11 @@ export class GameScene extends Phaser.Scene {
   private unsubscribe?: () => void;
   private arena!: Arena;
   private hud!: Hud;
+  private connection!: ConnectionBanner;
+  private pauseButton?: TextButton;
+  private confirm?: Dialog;
+  /** The leave dialog paused the offline match, so closing it resumes. */
+  private confirmPaused = false;
   private readonly cars = new Map<string, CarView>();
 
   // The state moves once per tick; we draw between the last two ticks.
@@ -91,16 +106,28 @@ export class GameScene extends Phaser.Scene {
     this.touch = undefined;
     this.debug = undefined;
     this.tune = undefined;
+    this.pauseButton = undefined;
+    this.confirm = undefined;
+    this.confirmPaused = false;
   }
 
   create(): void {
     ensureTextures(this);
+    // Every game starts from the default driving numbers; saved ?tune values only for a local ?tune game.
+    applyGameTuning({ online: this.transport.online, tune: this.data_.tune, saved: savedTuning() });
+    useScaleMode(this, Phaser.Scale.FIT);
     requireLandscape(this);
+    keepScreenOn(this);
+    const disarmFullscreen = fullscreenOnFirstTap();
     this.cameras.main.setBackgroundColor('#120a24');
     this.arena = new Arena(this);
     const leftHanded = isTouch && getSetting('leftHanded');
     this.hud = new Hud(this, leftHanded);
+    // The fullscreen icon sits on the round-info side, away from the scores.
+    document.body.classList.toggle('chrome-left', leftHanded);
     this.createOverlays();
+    this.createButtons(leftHanded);
+    this.connection = new ConnectionBanner(this);
 
     const keyboard = new KeyboardInput(this.input.keyboard!);
     if (isTouch) {
@@ -112,16 +139,29 @@ export class GameScene extends Phaser.Scene {
 
     this.unsubscribe = this.transport.onEvents((events) => this.handleEvents(events));
     this.game.events.on(Phaser.Core.Events.HIDDEN, this.onHidden, this);
-    this.input.keyboard!.on('keydown-P', () => this.togglePause());
-    this.input.keyboard!.on('keydown-ENTER', () => this.newMatch());
-    this.overlayBg.on('pointerdown', () => this.newMatch());
+    this.input.keyboard!.on('keydown-P', () => {
+      if (!this.confirm) this.togglePause();
+    });
+    this.input.keyboard!.on('keydown-ENTER', () => this.onContinue());
+    this.overlayBg.on('pointerdown', () => this.onContinue());
+    // Esc opens and closes the leave dialog (a DOM listener, so it stays in step with the dialog's buttons).
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !e.repeat) this.setConfirm(!this.confirm);
+    };
+    window.addEventListener('keydown', onEsc);
 
     if (this.data_.debug) this.debug = new DebugOverlay(this);
-    if (this.data_.tune && this.transport.pausable) this.tune = new TunePanel();
+    if (this.data_.tune && !this.transport.online) this.tune = new TunePanel();
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      window.removeEventListener('keydown', onEsc);
+      disarmFullscreen();
+      this.confirm?.close();
+      document.body.classList.remove('chrome-left');
       this.unsubscribe?.();
       this.controls.destroy();
+      // Phaser keeps key captures game-wide: without this, WASD and Space could not be typed in the menus.
+      this.input.keyboard!.clearCaptures();
       this.tune?.destroy();
       for (const car of this.cars.values()) car.destroy();
       this.game.events.off(Phaser.Core.Events.HIDDEN, this.onHidden, this);
@@ -129,15 +169,24 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(time: number): void {
+    if (!this.connection.update(this.transport, time)) return;
     const before = this.transport.getState();
     const meBefore = before.players[this.transport.playerId];
     const input = this.controls.poll({ heading: meBefore?.heading ?? 0 });
-    const canDrive = before.phase === 'playing' && !!meBefore?.alive && !this.transport.isPaused();
+    const canDrive = before.phase === 'playing' && !!meBefore?.alive && !this.transport.isPaused() && !this.confirm;
     this.transport.setInput(canDrive ? input : NO_INPUT);
     this.transport.update(this.game.loop.delta);
+    notifyPresence(this.transport);
 
     const state = this.transport.getState();
+    if (state.phase === 'lobby' && !this.data_.newMatch) {
+      const data: LobbySceneData = { transport: this.transport };
+      this.scene.start('lobby', data);
+      return;
+    }
     const me = state.players[this.transport.playerId];
+    this.pauseButton?.setVisible(state.phase === 'playing' || state.phase === 'intermission');
+    this.pauseButton?.setText(this.transport.isPaused() ? 'Continuă' : 'Pauză');
     this.touch?.setVisible(state.phase === 'playing' && !!me?.alive && !this.transport.isPaused());
     if (me) this.touch?.setBoostReady(1 - me.boostCooldown / BOOST_COOLDOWN_TICKS);
 
@@ -308,10 +357,15 @@ export class GameScene extends Phaser.Scene {
         const lines = computeStandings(state as GameState)
           .slice(0, 6)
           .map((id, i) => `${i + 1}. ${name(id)}  ${state.players[id]!.points} p`);
-        const again = this.data_.newMatch ? `\n\n${isTouch ? 'Atinge aici' : 'Enter'} = încă un meci` : '';
+        const tap = isTouch ? 'Atinge aici' : 'Enter';
+        const again = this.data_.newMatch
+          ? `\n\n${tap} = încă un meci`
+          : state.hostId === this.transport.playerId
+            ? `\n\n${tap} = înapoi în lobby`
+            : '\n\nAșteaptă ca hostul să revină în lobby.';
         text = `${result}\n\nGata meciul!\n${lines.join('\n')}${again}`;
       }
-    } else if (this.transport.isPaused()) {
+    } else if (this.transport.isPaused() && !this.confirm) {
       text = `Pauză\n\n${isTouch ? 'Revino în joc' : 'P = continuă'}`;
     }
     this.overlayText.setText(text);
@@ -337,15 +391,82 @@ export class GameScene extends Phaser.Scene {
     if (this.transport.pausable && this.transport.getState().phase !== 'finished') this.transport.setPaused(true);
   }
 
-  private newMatch(): void {
-    const next = this.data_.newMatch;
-    if (this.transport.getState().phase === 'finished' && next) {
-      this.transport.dispose();
-      this.scene.restart(next());
+  /** Enter or a tap on the panel: after the match a new one (test URL) or back to the lobby (host); paused, resume. */
+  private onContinue(): void {
+    if (this.confirm) return;
+    const state = this.transport.getState();
+    if (state.phase === 'finished') {
+      const next = this.data_.newMatch;
+      if (next) {
+        this.transport.dispose();
+        this.scene.restart(next());
+      } else if (state.hostId === this.transport.playerId) {
+        // Back in the lobby phase, update() hands over to the lobby scene.
+        this.transport.send({ type: 'lobby' });
+      }
       return;
     }
     // On a phone, a tap on the pause panel resumes.
     if (this.transport.isPaused()) this.togglePause();
+  }
+
+  /**
+   * Leaving is offered in every phase: "Ieși (Esc)" in the HUD on a desktop, "Ieși" in the round-info
+   * zone on a phone, with "Pauză" under it in offline games (P on a desktop).
+   */
+  private createButtons(leftHanded: boolean): void {
+    if (!TOUCH_LAYOUT) {
+      new TextButton(this, HUD_X, GAME_H - 24, 'Ieși (Esc)', () => this.setConfirm(true), 'secondary', 16).setOrigin(0, 1).setDepth(DEPTH.hud);
+      return;
+    }
+    const x = leftHanded ? HUD_X : GAME_W - SIDE_W + 16;
+    const leave = new TextButton(this, x, 190, 'Ieși', () => this.setConfirm(true), 'secondary', 24).setOrigin(0, 0).setWidth(150, 14);
+    leave.setDepth(DEPTH.hud);
+    if (this.transport.pausable) {
+      this.pauseButton = new TextButton(this, x, 190 + leave.height + 14, 'Pauză', () => this.togglePause(), 'secondary', 24)
+        .setOrigin(0, 0)
+        .setWidth(150, 14)
+        .setDepth(DEPTH.hud);
+    }
+  }
+
+  /** "Sigur ieși?" before leaving a match for good; an offline match waits paused meanwhile. */
+  private setConfirm(open: boolean): void {
+    if (open === !!this.confirm) return;
+    if (!open) {
+      this.confirm!.close();
+      this.confirm = undefined;
+      if (this.confirmPaused) this.transport.setPaused(false);
+      this.confirmPaused = false;
+      return;
+    }
+    this.controls.releaseAll();
+    if (this.transport.pausable && !this.transport.isPaused() && this.transport.getState().phase !== 'finished') {
+      this.transport.setPaused(true);
+      this.confirmPaused = true;
+    }
+    const stay = button('Rămân', () => this.setConfirm(false), 'primary', 'medium');
+    this.confirm = openDialog([
+      el('h2', { text: this.leaveWarning() }),
+      el('div', { class: 'btn-row' }, [button('Da, ieși', () => this.leaveMatch(), 'secondary', 'medium'), stay]),
+    ]);
+    stay.focus();
+  }
+
+  private leaveWarning(): string {
+    const state = this.transport.getState();
+    const me = state.players[this.transport.playerId];
+    if (state.phase === 'finished') return 'Ieși în meniu?';
+    if (!this.transport.online) return 'Sigur ieși?\nMeciul offline se încheie.';
+    if (state.phase === 'playing' && me?.alive) return 'Sigur ieși? Pierzi runda.';
+    return 'Sigur ieși?\nRămâi în clasament ca „a ieșit”.';
+  }
+
+  /** For good. Online (stage 4) the server then applies leavePlayer; offline the game just ends. */
+  private leaveMatch(): void {
+    this.transport.dispose();
+    const data: MenuSceneData = {};
+    this.scene.start('menu', data);
   }
 }
 

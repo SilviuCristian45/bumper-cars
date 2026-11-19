@@ -1,12 +1,18 @@
-/* Page and the HTML layers over the game canvas (touch controls, tuning panel, rotate prompt). */
+/* Page, HTML screens (intro, name, menu, lobby) and the HTML layers over the game canvas. */
 
 :root {
   --bg: #120a24;
   --panel: rgba(28, 16, 54, 0.94);
   --line: #5b3d8f;
-  --yellow: #ffe066;
-  --text: #eaf2ff;
-  --muted: #9aa6c8;
+  --line-dim: #3a1f63;
+  --yellow: #ffd166;
+  --yellow-hover: #ffe39a;
+  --red: #c8243f;
+  --text: #fff4d6;
+  --text-soft: #e6d9f5;
+  --muted: #a99cc8;
+  --faint: #6a5a88;
+  --error: #ff8fa3;
   --cyan: #4cc9f0;
   --font: 'Trebuchet MS', 'Segoe UI', Verdana, sans-serif;
   --sat: env(safe-area-inset-top, 0px);
@@ -44,6 +50,10 @@ body {
   inset: 0;
   box-sizing: border-box;
   padding: var(--sat) var(--sar) var(--sab) var(--sal);
+}
+
+body.html-screen #game {
+  padding: 0;
 }
 
 #stage {

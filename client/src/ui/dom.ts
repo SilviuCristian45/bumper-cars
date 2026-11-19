@@ -1,4 +1,7 @@
-// Small helpers for the HTML parts of the UI (touch controls, tuning panel; menus come later).
+import Phaser from 'phaser';
+import { isTouch } from '../device';
+
+// Small helpers for the HTML parts of the UI (screens, dialogs, toasts, touch controls, tuning panel).
 
 type Child = Node | string | null | undefined | false;
 
@@ -22,12 +25,112 @@ export function el<K extends keyof HTMLElementTagNameMap>(tag: K, props: ElProps
   return node;
 }
 
-/** Sets text only when it changed (HUD parts refresh every frame). */
+export type ButtonStyle = 'primary' | 'secondary';
+
+export function button(label: string, onClick: () => void, style: ButtonStyle = 'secondary', size = ''): HTMLButtonElement {
+  return el('button', { class: `btn ${style} ${size}`.trim(), text: label, attrs: { type: 'button' }, onClick: () => onClick() });
+}
+
+/** "Mașinuțe de Bâlci" as a fair sign: each letter in its own bulb color. */
+export function title(small = false): HTMLHeadingElement {
+  const h1 = el('h1', { class: small ? 'title small' : 'title', attrs: { 'aria-label': 'Mașinuțe de Bâlci' } });
+  ['Mașinuțe', 'de Bâlci'].forEach((line) => {
+    const row = el('span', { class: 'title-line', attrs: { 'aria-hidden': 'true' } });
+    [...line].forEach((ch, i) => row.append(ch === ' ' ? ' ' : el('span', { class: `t${i % 5}`, text: ch })));
+    h1.append(row);
+  });
+  return h1;
+}
+
+/** Switches a button between the primary and secondary look. */
+export function setButtonStyle(btn: HTMLButtonElement, style: ButtonStyle): void {
+  btn.classList.toggle('primary', style === 'primary');
+  btn.classList.toggle('secondary', style === 'secondary');
+}
+
+/** Sets text only when it changed (screens and HUD parts refresh every frame). */
 export function setText(node: HTMLElement, text: string): void {
   if (node.textContent !== text) node.textContent = text;
 }
 
-/** Keys typed into a text field are text, not driving. */
+export function show(node: HTMLElement, visible: boolean): void {
+  node.hidden = !visible;
+}
+
+/**
+ * Puts an HTML screen over the canvas for as long as the scene runs. The canvas behind it only
+ * draws the fair at night, stretched to cover the whole page (portrait phones included).
+ */
+export function mountScreen(scene: Phaser.Scene, className: string, children: Child[]): HTMLElement {
+  const column = el('div', { class: 'column' }, children);
+  const screen = el('div', { class: `screen ${className}` }, [column]);
+  document.body.append(screen);
+  document.body.classList.add('html-screen');
+  useScaleMode(scene, Phaser.Scale.ENVELOP);
+  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+    screen.remove();
+    if (!document.querySelector('.screen')) document.body.classList.remove('html-screen');
+  });
+  return column;
+}
+
+/** FIT for the game (all of the arena visible), ENVELOP behind the HTML screens. */
+export function useScaleMode(scene: Phaser.Scene, mode: Phaser.Scale.ScaleModeType): void {
+  const scale = scene.scale;
+  scale.scaleMode = mode;
+  // FIT / ENVELOP is really the display size's aspect mode.
+  scale.displaySize.setAspectMode(mode);
+  // The parent may have just changed size (safe-area padding comes and goes with the HTML screens).
+  scale.getParentBounds();
+  scale.refresh();
+}
+
+/** Keys typed into the nickname or code fields are text, not driving or shortcuts. */
 export function isTyping(): boolean {
   return document.activeElement instanceof HTMLInputElement && document.activeElement.type === 'text';
+}
+
+/** Whether a modal dialog is open (keys then belong to it). */
+export function dialogOpen(): boolean {
+  return !!document.querySelector('.modal-backdrop');
+}
+
+/** A page-wide key handler for the scene's lifetime; skipped while typing, on a focused button (it has its own Enter) or under a dialog. */
+export function onKey(scene: Phaser.Scene, key: string, handler: () => void): void {
+  const listener = (e: KeyboardEvent) => {
+    if (e.key !== key || e.repeat || isTyping() || document.activeElement instanceof HTMLButtonElement || dialogOpen()) return;
+    handler();
+  };
+  window.addEventListener('keydown', listener);
+  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => window.removeEventListener('keydown', listener));
+}
+
+/** On phones the keyboard slides over the lower half: bring the focused field back into view. */
+export function keepInViewOnFocus(input: HTMLElement): void {
+  if (!isTouch) return;
+  input.addEventListener('focus', () => {
+    window.setTimeout(() => input.scrollIntoView({ block: 'center', behavior: 'smooth' }), 350);
+  });
+}
+
+/**
+ * Screens follow the visual viewport (CSS --vv-top / --vv-height), which shrinks when the phone
+ * keyboard opens; called once at startup.
+ */
+export function trackVisualViewport(): void {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const root = document.documentElement;
+  const sync = () => {
+    root.style.setProperty('--vv-top', `${vv.offsetTop}px`);
+    root.style.setProperty('--vv-height', `${vv.height}px`);
+  };
+  vv.addEventListener('resize', sync);
+  vv.addEventListener('scroll', sync);
+  sync();
+}
+
+/** A texture baked by render/textures.ts as an image URL, for the HTML parts. */
+export function textureUrl(game: Phaser.Game, key: string): string {
+  return game.textures.getBase64(key);
 }

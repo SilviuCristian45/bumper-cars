@@ -18,13 +18,21 @@ Nivelurile boților: `usor`, `mediu`, `greu` (2–6 boți). `--seed` schimbă me
 
 ## Controale
 
-- Tastatură: săgeți sau WASD (stânga/dreapta = viraj, sus = accelerație, jos = frână și marșarier), Spațiu = boost, P = pauză.
-- Telefon (pe orizontală): joystick în stânga (mașina virează spre direcția lui și accelerează cât îl împingi), buton de boost în dreapta.
+- Tastatură: săgeți sau WASD (stânga/dreapta = viraj, sus = accelerație, jos = frână și marșarier), Spațiu = boost, P = pauză, Esc = ieși, F = ecran complet.
+- Telefon (pe orizontală): joystick în stânga (mașina virează spre direcția lui și accelerează cât îl împingi), buton de boost în dreapta. Din „Setări”: mod stângaci, vibrații, efecte reduse.
+
+## Cum se joacă
+
+Intro → porecla → meniu: „Creează joc”, „Intră la un prieten” (cod de 6 caractere) sau „Joacă offline cu boți”.
+În lobby hostul alege 3/5/7 runde și boții (până la 6 mașinuțe, fiecare bot cu nivelul lui), apoi Start.
+După meci, hostul îi duce pe toți înapoi în lobby. Jocul online vine în etapa 4.
 
 ## Opțiuni de test în URL
 
 `?bots=1..5`, `?rounds=3|5|7`, `?seed=abc`, `?botlevel=usor|mediu|greu`, `?debug` (hitbox-uri, vectori, ce fac boții),
 `?touch` / `?touch=0` (forțează controalele de telefon) și `?tune` (panou cu reglaje pentru condus, cu „Copiază valorile”).
+Toate în afară de `?touch` sar peste meniuri direct într-un meci local. Reglajele salvate din `?tune` se aplică doar
+cu `?tune` în URL și niciodată într-un joc online.
 
 Tehnologii: Phaser 3, TypeScript, Vite, Colyseus. Simularea (în `shared/`) e deterministă și rulează
 la fel în browser și pe server.

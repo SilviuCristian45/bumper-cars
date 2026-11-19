@@ -1,0 +1,172 @@
+import Phaser from 'phaser';
+import { MAX_PLAYERS, sanitizeName } from '@masinute/shared';
+import { isTouch } from '../device';
+import type { GameTransport } from '../net/GameTransport';
+import { createOfflineRoom, createRoom, joinRoom, onlineEnabled, RoomError } from '../net/rooms';
+import { ensureTextures } from '../render/textures';
+import { getSetting, setSetting } from '../settings';
+import { load } from '../storage';
+import { drawBackdrop } from '../ui/backdrop';
+import { CodeInput } from '../ui/CodeInput';
+import { button, el, mountScreen, setButtonStyle, title } from '../ui/dom';
+import { installHint } from '../ui/installHint';
+import { openSettings } from '../ui/settingsDialog';
+import type { LobbySceneData } from './LobbyScene';
+import type { NameSceneData } from './NameScene';
+
+export interface MenuSceneData {
+  /** Code from a ?room= invite link: joined right away. */
+  invite?: string;
+  /** Shown on arrival, e.g. an invalid invite link or a lost connection. */
+  message?: string;
+}
+
+/** Two obvious choices: create a game, or join a friend's by code. Offline play with bots is the third. */
+export class MenuScene extends Phaser.Scene {
+  private opts!: MenuSceneData;
+  private status!: HTMLElement;
+  private codeProblem!: HTMLElement;
+  private codeInput!: CodeInput;
+  private createButton!: HTMLButtonElement;
+  private offlineButton!: HTMLButtonElement;
+  private busy = false;
+
+  constructor() {
+    super('menu');
+  }
+
+  init(data: MenuSceneData): void {
+    this.opts = data;
+    this.busy = false;
+  }
+
+  create(): void {
+    ensureTextures(this);
+    drawBackdrop(this);
+
+    this.status = el('p', { class: 'message status', text: this.opts.message ?? '' });
+    this.offlineButton = button('Joacă offline cu boți', () => this.onPlayOffline(), onlineEnabled ? 'secondary' : 'primary', 'medium');
+    mountScreen(this, 'menu', [
+      title(true),
+      this.playingAs(),
+      el('div', { class: 'cards' }, [this.createCreateCard(), this.createJoinCard()]),
+      this.status,
+      // One row, so a phone held sideways sees all of it ("Setări" only on touch devices).
+      el('div', { class: 'menu-footer' }, [this.offlineButton, isTouch ? button('Setări', () => openSettings(), 'secondary', 'small') : null]),
+      isTouch ? null : this.effectsToggle(),
+      installHint(),
+    ]);
+
+    if (this.opts.invite) this.joinInvite(this.opts.invite);
+    else if (!isTouch && onlineEnabled) this.codeInput.focus();
+  }
+
+  /** Desktop: the "Efecte reduse" toggle in the corner (touch devices have it under "Setări"). */
+  private effectsToggle(): HTMLElement {
+    const label = () => `Efecte reduse: ${getSetting('reducedEffects') ? 'da' : 'nu'}`;
+    const toggle = button(
+      label(),
+      () => {
+        setSetting('reducedEffects', !getSetting('reducedEffects'));
+        toggle.textContent = label();
+      },
+      'secondary',
+      'small',
+    );
+    toggle.classList.add('corner-toggle');
+    return toggle;
+  }
+
+  /** "Joci ca {nume} · schimbă" */
+  private playingAs(): HTMLElement {
+    const change = el('button', { class: 'link', text: '· schimbă', attrs: { type: 'button' } });
+    change.addEventListener('click', () => {
+      if (this.busy) return;
+      const data: NameSceneData = { edit: true };
+      this.scene.start('name', data);
+    });
+    return el('p', { class: 'playing-as' }, [`Joci ca ${this.playerName()} `, change]);
+  }
+
+  private createCreateCard(): HTMLElement {
+    this.createButton = button('Creează', () => this.onCreateRoom(), onlineEnabled ? 'primary' : 'secondary', 'medium');
+    this.createButton.classList.add('card-action');
+    const card = el('div', { class: 'card clickable' }, [
+      el('h2', { text: 'Creează joc' }),
+      el('p', { text: `Invită până la ${MAX_PLAYERS - 1} prieteni` }),
+      this.createButton,
+      onlineEnabled ? null : el('p', { class: 'soon', text: 'Disponibil în curând' }),
+    ]);
+    card.addEventListener('click', (e) => {
+      if (e.target !== this.createButton) this.onCreateRoom();
+    });
+    return card;
+  }
+
+  private createJoinCard(): HTMLElement {
+    this.codeProblem = el('p', { class: 'problem' });
+    this.codeInput = new CodeInput({
+      onComplete: (code) => this.join(code),
+      onProblem: (message) => (this.codeProblem.textContent = message),
+    });
+    return el('div', { class: 'card' }, [
+      el('h2', { text: 'Intră la un prieten' }),
+      el('p', { text: 'Scrie codul de 6 caractere primit' }),
+      this.codeInput.element,
+      this.codeProblem,
+    ]);
+  }
+
+  private playerName(): string {
+    return sanitizeName(load('name') ?? '');
+  }
+
+  private onCreateRoom(): void {
+    void this.connect(createRoom(this.playerName()), 'Se creează jocul...');
+  }
+
+  private onPlayOffline(): void {
+    void this.connect(createOfflineRoom(this.playerName()), 'Se pregătește jocul offline...');
+  }
+
+  private join(code: string): void {
+    void this.connect(joinRoom(code, this.playerName()), `Intri în ${code}...`);
+  }
+
+  private joinInvite(code: string): void {
+    this.codeInput.setCode(code);
+    // Whatever happens, a later reload of this page should not retry the invite.
+    const url = new URL(window.location.href);
+    url.searchParams.delete('room');
+    window.history.replaceState(null, '', url);
+    this.join(code);
+  }
+
+  private async connect(pending: Promise<GameTransport>, message: string): Promise<void> {
+    if (this.busy) return;
+    this.setBusy(true);
+    this.setStatus(message, true);
+    try {
+      const transport = await pending;
+      const data: LobbySceneData = { transport };
+      this.scene.start('lobby', data);
+    } catch (err) {
+      this.setBusy(false);
+      this.setStatus(err instanceof Error ? err.message : 'Nu s-a putut intra în joc.', false);
+      // No server (or a full one): highlight "Joacă offline cu boți" right under the message.
+      if (err instanceof RoomError && err.offline) setButtonStyle(this.offlineButton, 'primary');
+    }
+  }
+
+  private setStatus(text: string, info: boolean): void {
+    this.status.textContent = text;
+    this.status.classList.toggle('info', info);
+  }
+
+  private setBusy(busy: boolean): void {
+    this.busy = busy;
+    this.createButton.disabled = busy;
+    this.offlineButton.disabled = busy;
+    this.codeInput.setDisabled(busy);
+  }
+}

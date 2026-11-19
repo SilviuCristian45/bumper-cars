@@ -76,7 +76,8 @@ export class Hud {
     if (!TOUCH_LAYOUT) {
       this.boostLabel = text(this.boostX, this.boostY, 18);
       this.boostBar = scene.add.graphics().setDepth(DEPTH.hud);
-      text(HUD_X, GAME_H - 64, 15, '#9aa6c8').setText('Săgeți / WASD = condus  ·  Spațiu = boost\nP = pauză');
+      // The "Ieși (Esc)" button (GameScene) sits under this.
+      text(HUD_X, GAME_H - 112, 15, '#9aa6c8').setText('Săgeți / WASD = condus  ·  Spațiu = boost\nP = pauză  ·  F = ecran complet');
     }
   }
 
