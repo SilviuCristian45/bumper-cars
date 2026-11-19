@@ -1,0 +1,20 @@
+{
+  "name": "@masinute/client",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@colyseus/sdk": "^0.18.10",
+    "@masinute/shared": "0.1.0",
+    "phaser": "3.90.0"
+  },
+  "devDependencies": {
+    "vite": "^8.3.8"
+  }
+}
