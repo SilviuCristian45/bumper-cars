@@ -1,27 +1,16 @@
 import {
-  ACCEL,
-  BOOST_ACCEL,
-  BOOST_MASS,
-  BOOST_MAX_SPEED,
-  BRAKE,
   BUMP_EVENT_MIN,
   CAR_MASS,
   CAR_RADIUS,
-  FRICTION,
-  GRIP,
-  GRIP_HIT,
   HIT_MIN_SPEED,
   INPUT_MAX,
   MAX_REVERSE_SPEED,
-  MAX_SPEED,
-  RESTITUTION,
-  SLIDE_TICKS,
   REVERSE_ACCEL,
+  SLIDE_TICKS,
   TURN_FULL_SPEED,
-  TURN_MOVING,
-  TURN_STILL,
 } from './constants';
 import { icos, idiv, isin, isqrt, TRIG_ONE, wrapAngle } from './fixed';
+import { TUNING } from './tuning';
 import type { GameEvent, PlayerState } from './types';
 
 // Car physics in integers: cars are discs with a heading. Everything is truncated toward zero
@@ -45,7 +34,7 @@ export function driveCar(p: PlayerState): void {
 
   // Turning: possible on the spot, quicker when moving; reversed when rolling backwards, like a car.
   const speedFactor = Math.min(Math.abs(fwd0), TURN_FULL_SPEED);
-  const turnRate = TURN_STILL + idiv((TURN_MOVING - TURN_STILL) * speedFactor, TURN_FULL_SPEED);
+  const turnRate = TUNING.turnStill + idiv((TUNING.turnMoving - TUNING.turnStill) * speedFactor, TURN_FULL_SPEED);
   const steer = fwd0 < -TURN_FULL_SPEED / 4 ? -p.steer : p.steer;
   p.heading = wrapAngle(p.heading + idiv(steer * turnRate, INPUT_MAX));
 
@@ -55,25 +44,25 @@ export function driveCar(p: PlayerState): void {
   let side = idiv(-p.vx * sin + p.vy * cos, TRIG_ONE);
 
   let accel = 0;
-  if (p.throttle > 0) accel = idiv(p.throttle * ACCEL, INPUT_MAX);
-  else if (p.throttle < 0) accel = idiv(p.throttle * (fwd > 0 ? BRAKE : REVERSE_ACCEL), INPUT_MAX);
+  if (p.throttle > 0) accel = idiv(p.throttle * TUNING.accel, INPUT_MAX);
+  else if (p.throttle < 0) accel = idiv(p.throttle * (fwd > 0 ? TUNING.brake : REVERSE_ACCEL), INPUT_MAX);
   if (p.boostTicks > 0) {
-    accel += BOOST_ACCEL;
+    accel += TUNING.boostAccel;
     p.boostTicks--;
   }
   // Braking never flips the car into reverse within the same tick.
   if (p.throttle < 0 && fwd > 0 && fwd + accel < 0) fwd = 0;
   else fwd += accel;
-  if (p.throttle <= 0 || fwd < 0) fwd = decay(fwd, FRICTION);
-  else fwd = fwd - idiv(fwd * FRICTION, 1000);
-  side = decay(side, p.slideTicks > 0 ? GRIP_HIT : GRIP);
+  if (p.throttle <= 0 || fwd < 0) fwd = decay(fwd, TUNING.friction);
+  else fwd = fwd - idiv(fwd * TUNING.friction, 1000);
+  side = decay(side, p.slideTicks > 0 ? TUNING.gripHit : TUNING.grip);
   if (p.slideTicks > 0) p.slideTicks--;
   if (fwd < -MAX_REVERSE_SPEED) fwd = -MAX_REVERSE_SPEED;
 
   p.vx = idiv(fwd * cos - side * sin, TRIG_ONE);
   p.vy = idiv(fwd * sin + side * cos, TRIG_ONE);
-  if (p.boostTicks > 0) limitSpeed(p, BOOST_MAX_SPEED, true);
-  else limitSpeed(p, MAX_SPEED, false);
+  if (p.boostTicks > 0) limitSpeed(p, TUNING.boostMaxSpeed, true);
+  else limitSpeed(p, TUNING.maxSpeed, false);
 
   p.x += p.vx;
   p.y += p.vy;
@@ -92,7 +81,7 @@ function limitSpeed(p: PlayerState, max: number, hard: boolean): void {
 }
 
 export function massOf(p: PlayerState): number {
-  return p.boostTicks > 0 ? BOOST_MASS : CAR_MASS;
+  return p.boostTicks > 0 ? TUNING.boostMass : CAR_MASS;
 }
 
 /**
@@ -135,7 +124,7 @@ export function collide(a: PlayerState, b: PlayerState, tick: number, events: Ga
   if (closing <= 0) return; // already moving apart
 
   // Impulse J = (1 + e) * closing * ma * mb / (ma + mb); a loses J/ma along n, b gains J/mb.
-  const impulse = idiv((100 + RESTITUTION) * closing * ma * mb, 100 * (ma + mb));
+  const impulse = idiv((100 + TUNING.restitution) * closing * ma * mb, 100 * (ma + mb));
   a.vx -= idiv(impulse * nx, ma * TRIG_ONE);
   a.vy -= idiv(impulse * ny, ma * TRIG_ONE);
   b.vx += idiv(impulse * nx, mb * TRIG_ONE);

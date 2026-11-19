@@ -6,6 +6,7 @@ export * from './fixed';
 export * from './types';
 export * from './rng';
 export * from './match';
+export * from './tuning';
 export * from './physics';
 export * from './sim';
 export * from './bot';

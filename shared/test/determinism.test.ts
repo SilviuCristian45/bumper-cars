@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOT_EASY, BOT_HARD, BOT_MEDIUM, addPlayer, createGameState, hash32, runTick, startMatch } from '../src';
+import { BOT_EASY, BOT_HARD, BOT_MEDIUM, DEFAULT_TUNING, TUNING, addPlayer, createGameState, hash32, runTick, startMatch } from '../src';
 import type { GameEvent, GameState, PlayerInput } from '../src';
 import { numbersIn } from './helpers';
 
@@ -32,6 +32,10 @@ function play(state: GameState, ticks: number): GameEvent[] {
 }
 
 describe('determinism', () => {
+  it('the simulation runs with the default tuning (only the local ?tune panel may change it)', () => {
+    expect(TUNING).toEqual(DEFAULT_TUNING);
+  });
+
   it('same seed and inputs give a byte-identical state and identical events', () => {
     const a = newMatch('seed-1');
     const b = newMatch('seed-1');

@@ -30,6 +30,8 @@ npm run test:watch -w shared
 
 Server room tests boot a real server on port 2569 (not 2568, which is the dev/prod port, and not Bombe's ports).
 
+Test URL options (until the menus exist, every visit starts a local match): `?debug` (hitboxes, heading/velocity vectors, hit credit, each bot's intent/target/input, tick/FPS, own speed/boost/slide/seq), `?bots=1..5` (default 3), `?rounds=3|5|7`, `?seed=abc`, `?botlevel=usor|mediu|greu`, `?touch` / `?touch=0` (force the phone layout and touch controls, otherwise `(hover: none) and (pointer: coarse)`, see `client/src/device.ts`), `?tune` (driving-feel sliders, see below). In-game: `P` pauses (local only), `Enter` (or a tap on the final panel) starts a new match.
+
 ## Architecture
 
 ### `/shared` — deterministic simulation (no Phaser, no DOM)
@@ -39,6 +41,7 @@ Server room tests boot a real server on port 2569 (not 2568, which is the dev/pr
 - Fixed tick: 30/s (`TICK_RATE`). The same `runTick`/`step()` runs in `LocalTransport`, in client-side prediction and on the server.
 - State is flat (players as `Record<id, PlayerState>`, plain arrays) so it maps onto `@colyseus/schema`. A new state field must be added to the schema, the mirror and the client's state rebuild.
 - Input per tick: `{ seq, steer, throttle, boost }` (`steer`/`throttle` integers in -100..100, boost latched until the next tick).
+- `tuning.ts`: the driving-feel numbers physics reads at run time (`TUNING`, defaults `DEFAULT_TUNING` from `constants.ts`). **Only the local `?tune` panel may change `TUNING`** (client and server must step with identical numbers); a test asserts the defaults. To adopt tuned values, change the constants in `constants.ts` and re-run the balance test.
 - Modules: `fixed.ts` (angle steps `ANGLE_STEPS` = 1024, literal quarter-wave sine table scaled by `TRIG_ONE`, `isin`/`icos`/`iatan2`/`isqrt`/`idiv` (never returns -0, so states survive JSON unchanged), `hash32`/`percent` for bot rolls); `constants.ts` (all tuning: speeds, grip, boost, mass, ring, timings, scoring); `physics.ts` (`driveCar`: steer/throttle/boost/friction/grip, lower grip for `slideTicks` after being hit; `collide`: disc–disc impulse with mass (boosting = heavier) and restitution, positional separation, knockout credit via `lastHitBy`/`lastHitTick`; `isOutside`); `sim.ts` (`applyInput`, `step`, countdown, ring shrink `ringRadiusAt`, eliminations and scoring, round end: one left = win +3, none left = draw, 90 s = timeout); `match.ts` (lobby/round/match lifecycle as in Bombe: `createGameState`, `addPlayer`, `addBot`, `startMatch`, `startRound` (seeded rotation of the spawn circle), `leavePlayer`, `backToLobby`, standings); `bot.ts`; `runner.ts` (`runTick` = inputs + bot decisions + `step`, `skipBotRound`); `protocol.ts` (wire contract, `INPUT_QUEUE_MAX`).
 - Players are always iterated with `sortedPlayers` (slot order) and collision pairs in that order: never depend on object key order.
 - **Bots** (`BOT_PARAMS` per level: decision interval, aggression, edge margin + lookahead, boost range/alignment, escape boost, mistakes, aim noise). `botThink` is pure (rolls are hashes of `state.rng`, round, decision index, slot; it never advances the RNG), `botAct` returns an input only on decision ticks and the held input carries the bot in between. Retune against `test/balance.test.ts` and `npm run balance`.
@@ -50,7 +53,12 @@ Server room tests boot a real server on port 2569 (not 2568, which is the dev/pr
 - Client predicts its own car (applies inputs at once, keeps them buffered), and on every server state rewinds to it, drops inputs with `seq ≤ lastSeq` and replays the rest with the same `step()`; residual error is smoothed visually. Other cars are interpolated ~100 ms in the past. `?lag=120&jitter=30` simulates latency.
 
 ### `/client` — rendering only
-Scenes read state and send messages only through `GameTransport` (`LocalTransport` offline with bots, `ColyseusTransport` online). Textures are drawn from code; no assets from other games.
+- Scenes read state and send messages only through `GameTransport` (`client/src/net/GameTransport.ts`): `setInput(DriveInput)` every frame (the transport samples it once per simulation tick, numbers it with `seq` and latches boost presses), `send(RoomMessage)` for lobby actions, `onEvents`, `tickProgress()` (0..1 toward the next tick, for interpolation). `LocalTransport` runs `runTick` with a fixed-step accumulator at 30/s (max 250 ms catch-up). `ColyseusTransport` comes in stage 4.
+- Input (`client/src/input`): `InputSource.poll({ heading })` returns a `DriveInput` or null when unused; `CombinedInput` lets the first active source drive and any source boost. `KeyboardInput`: arrows/WASD (left/right steer, up gas, down brake/reverse), Space boost. `TouchInput` (HTML over the canvas, pointer events per finger): analog joystick (steers toward the joystick's direction relative to the car's heading, throttle proportional to the push, slow while turning around) and a boost button whose fill shows the cooldown; left-handed mode swaps them (`settings.ts`).
+- Layout (`render/layout.ts`): 1 simulation pixel = 1 canvas pixel, arena centered at `ARENA_CX/CY`; desktop has the HUD panel on the right, touch has a `SIDE_W` thumb zone on each side (scores on the joystick side, round info on the boost side). Phones play sideways (`ui/orientation.ts`).
+- Rendering: textures are drawn at startup with the 2D canvas API (`render/textures.ts`: diamond-plate floor, rubber rim, cars, glow/spark); `render/Arena.ts` (floor, chasing rim bulbs, darkened lost floor + red edge while the ring shrinks), `render/CarView.ts` (car, shadow, flickering antenna spark, name tag, local boost ring, fall-off animation), `render/Hud.ts`, `render/fx.ts` (particle bursts with a global cap; "Efecte reduse" = fewer particles, steady bulbs, no camera shake). `GameScene` interpolates poses (and the ring) between the last two ticks with `tickProgress()`.
+- `debug/TunePanel.ts` (`?tune`, local games only): sliders applied live via `setTuning`, saved in localStorage (`masinute.tune`), "Copiază valorile" copies them as `constants.ts` lines; on wide screens the canvas makes room for it (`body.tuning`).
+- `localStorage` goes through `client/src/storage.ts` (keys prefixed `masinute.`, failures ignored).
 
 ### `/server` — authoritative Colyseus 0.18 room
 `@colyseus/core` + `ws-transport` + `schema` 5. Production: `node dist/index.js` (esbuild bundle, no `node_modules`), loopback `127.0.0.1:2568`.
@@ -69,7 +77,7 @@ Scenes read state and send messages only through `GameTransport` (`LocalTranspor
 ## Plan
 0. Repo + monorepo + CLAUDE.md — done.
 1. `/shared`: physics, ring, scoring, rounds, bots + tests (determinism, collisions) — done.
-2. Rendering + LocalTransport + keyboard/touch controls.
+2. Rendering + LocalTransport + keyboard/touch controls — done.
 3. Menus and lobby (from Bombe și Petarde).
 4. Colyseus server + ColyseusTransport with prediction/reconciliation; simulated lag test (100–150 ms), incl. convergence after a collision.
 5. Deploy scripts (do not run on the VPS until told).
