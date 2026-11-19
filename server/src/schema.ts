@@ -1,0 +1,63 @@
+import { schema, t, type SchemaType } from '@colyseus/schema';
+
+// Synchronized mirror of the shared GameState (see mirror.ts). It carries every field, rng
+// included: clients predict by running the same simulation from it, so it must be complete.
+// A new GameState/PlayerState field goes into GAME_STATE_KEYS/PLAYER_STATE_KEYS and here.
+
+export const PlayerSchema = schema(
+  {
+    id: t.string(),
+    name: t.string(),
+    slot: t.uint8(),
+    joinOrder: t.uint32(),
+    isBot: t.boolean(),
+    botLevel: t.uint8(),
+    connected: t.boolean(),
+    left: t.boolean(),
+    alive: t.boolean(),
+    x: t.int32(),
+    y: t.int32(),
+    vx: t.int32(),
+    vy: t.int32(),
+    heading: t.uint16(),
+    steer: t.int8(),
+    throttle: t.int8(),
+    boostPressed: t.boolean(),
+    lastSeq: t.uint32(),
+    boostTicks: t.uint16(),
+    boostCooldown: t.uint16(),
+    slideTicks: t.uint16(),
+    lastHitBy: t.string(),
+    lastHitTick: t.uint32(),
+    wins: t.uint16(),
+    knockouts: t.uint16(),
+    selfOuts: t.uint16(),
+    outs: t.uint16(),
+    points: t.int16(),
+    bumps: t.uint16(),
+  },
+  'Player',
+);
+export type PlayerSchema = SchemaType<typeof PlayerSchema>;
+
+export const RoomState = schema(
+  {
+    code: t.string(),
+    phase: t.string(),
+    hostId: t.string(),
+    roundsTotal: t.uint8(),
+    botLevel: t.uint8(),
+    round: t.uint8(),
+    tick: t.uint32(),
+    roundTick: t.uint32(),
+    phaseTimer: t.uint16(),
+    roundWinner: t.string(),
+    roundOutcome: t.string(),
+    ringRadius: t.int32(),
+    rng: t.uint32(),
+    joinCounter: t.uint32(),
+    players: t.map(PlayerSchema),
+  },
+  'RoomState',
+);
+export type RoomState = SchemaType<typeof RoomState>;

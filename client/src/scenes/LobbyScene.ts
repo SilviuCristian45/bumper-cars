@@ -24,6 +24,7 @@ import { fullscreenOnFirstTap } from '../ui/fullscreen';
 import { requireLandscape } from '../ui/orientation';
 import { notifyPresence } from '../ui/presence';
 import { openSettings } from '../ui/settingsDialog';
+import { debug } from '../urlOptions';
 import type { GameSceneData } from './GameScene';
 
 export interface LobbySceneData {
@@ -152,7 +153,7 @@ export class LobbyScene extends Phaser.Scene {
     notifyPresence(this.transport);
     const state = this.transport.getState();
     if (state.phase !== 'lobby') {
-      const data: GameSceneData = { transport: this.transport, debug: false, tune: false };
+      const data: GameSceneData = { transport: this.transport, debug, tune: false };
       this.scene.start('game', data);
       return;
     }

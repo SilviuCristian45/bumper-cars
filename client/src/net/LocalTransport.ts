@@ -18,6 +18,7 @@ import {
 } from '@masinute/shared';
 import type { DriveInput } from '../input/InputSource';
 import type { ConnectionStatus, GameTransport, RoomMessage } from './GameTransport';
+import { TickBlend, type RenderView } from './view';
 
 export interface LocalOptions {
   name: string;
@@ -47,6 +48,7 @@ export class LocalTransport implements GameTransport {
   private acc = 0;
   private paused = false;
   private botCounter = 0;
+  private readonly blend = new TickBlend();
 
   constructor(opts: LocalOptions) {
     this.state = createGameState({ code: generateRoomCode(Math.random), seed: opts.seed });
@@ -92,8 +94,9 @@ export class LocalTransport implements GameTransport {
     }
   }
 
-  tickProgress(): number {
-    return this.paused ? 1 : Math.min(1, this.acc / TICK_MS);
+  view(): RenderView {
+    this.blend.push(this.state);
+    return this.blend.view(this.paused ? 1 : Math.min(1, this.acc / TICK_MS));
   }
 
   isPaused(): boolean {

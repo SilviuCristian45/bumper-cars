@@ -25,7 +25,11 @@ Nivelurile boților: `usor`, `mediu`, `greu` (2–6 boți). `--seed` schimbă me
 
 Intro → porecla → meniu: „Creează joc”, „Intră la un prieten” (cod de 6 caractere) sau „Joacă offline cu boți”.
 În lobby hostul alege 3/5/7 runde și boții (până la 6 mașinuțe, fiecare bot cu nivelul lui), apoi Start.
-După meci, hostul îi duce pe toți înapoi în lobby. Jocul online vine în etapa 4.
+După meci, hostul îi duce pe toți înapoi în lobby.
+
+Online: „Creează joc” dă un cod de 6 caractere și un link de invitație (`?room=COD`, „Trimite invitația” pe telefon,
+„Copiază link” pe calculator). Cine pierde conexiunea are 15 secunde să revină. Dacă serverul nu răspunde,
+meniul spune asta și propune jocul offline cu boți.
 
 ## Opțiuni de test în URL
 
@@ -33,6 +37,10 @@ După meci, hostul îi duce pe toți înapoi în lobby. Jocul online vine în et
 `?touch` / `?touch=0` (forțează controalele de telefon) și `?tune` (panou cu reglaje pentru condus, cu „Copiază valorile”).
 Toate în afară de `?touch` sar peste meniuri direct într-un meci local. Reglajele salvate din `?tune` se aplică doar
 cu `?tune` în URL și niciodată într-un joc online.
+
+Pentru jocul online: `?lag=120&jitter=30` simulează o rețea lentă (120 ms în plus dus-întors, până la 30 ms aleator
+pe fiecare mesaj), iar `?online` păstrează meniurile ca `?debug` să arate și ping-ul, eroarea de predicție,
+inputurile neconfirmate și corecțiile mari pe secundă (de exemplu `?online&debug&lag=120&jitter=30`).
 
 Tehnologii: Phaser 3, TypeScript, Vite, Colyseus. Simularea (în `shared/`) e deterministă și rulează
 la fel în browser și pe server.

@@ -6,7 +6,6 @@ import {
   FP,
   PLAYER_COLORS,
   TICK_RATE,
-  angleDiff,
   applyGameTuning,
   computeStandings,
   countdownSeconds,
@@ -23,6 +22,7 @@ import { NO_INPUT } from '../input/InputSource';
 import { KeyboardInput } from '../input/KeyboardInput';
 import { TouchInput } from '../input/TouchInput';
 import type { GameTransport } from '../net/GameTransport';
+import type { RenderView } from '../net/view';
 import { Arena } from '../render/Arena';
 import { CarView } from '../render/CarView';
 import { bumpSparks, boostPuff, outBurst } from '../render/fx';
@@ -49,12 +49,6 @@ export interface GameSceneData {
   newMatch?: () => GameSceneData;
 }
 
-interface Pose {
-  x: number;
-  y: number;
-  heading: number;
-}
-
 const START_SHOWN_TICKS = Math.round(0.8 * TICK_RATE); // "START!" stays a moment after the countdown
 const FLOAT_MS = 1300;
 const hex = (c: number) => '#' + c.toString(16).padStart(6, '0');
@@ -77,12 +71,8 @@ export class GameScene extends Phaser.Scene {
   private confirmPaused = false;
   private readonly cars = new Map<string, CarView>();
 
-  // The state moves once per tick; we draw between the last two ticks.
-  private readonly prevPose = new Map<string, Pose>();
-  private readonly curPose = new Map<string, Pose>();
-  private prevRing = 0;
-  private curRing = 0;
-  private lastTick = -1;
+  /** Where the transport says to draw everything this frame. */
+  private view: RenderView = { poses: new Map(), ringRadius: 0 };
 
   private countdown!: Phaser.GameObjects.Text;
   private lastCountdown = -1;
@@ -99,9 +89,7 @@ export class GameScene extends Phaser.Scene {
     this.transport = data.transport;
     // Phaser reuses the scene instance on every start: forget the previous match's views.
     this.cars.clear();
-    this.prevPose.clear();
-    this.curPose.clear();
-    this.lastTick = -1;
+    this.view = { poses: new Map(), ringRadius: 0 };
     this.lastCountdown = -1;
     this.touch = undefined;
     this.debug = undefined;
@@ -172,7 +160,9 @@ export class GameScene extends Phaser.Scene {
     if (!this.connection.update(this.transport, time)) return;
     const before = this.transport.getState();
     const meBefore = before.players[this.transport.playerId];
-    const input = this.controls.poll({ heading: meBefore?.heading ?? 0 });
+    // The joystick steers relative to the car as drawn (online: the predicted car).
+    const heading = this.view.poses.get(this.transport.playerId)?.heading ?? meBefore?.heading ?? 0;
+    const input = this.controls.poll({ heading: Math.round(heading) });
     const canDrive = before.phase === 'playing' && !!meBefore?.alive && !this.transport.isPaused() && !this.confirm;
     this.transport.setInput(canDrive ? input : NO_INPUT);
     this.transport.update(this.game.loop.delta);
@@ -190,43 +180,22 @@ export class GameScene extends Phaser.Scene {
     this.touch?.setVisible(state.phase === 'playing' && !!me?.alive && !this.transport.isPaused());
     if (me) this.touch?.setBoostReady(1 - me.boostCooldown / BOOST_COOLDOWN_TICKS);
 
-    this.snapshot(state);
-    const alpha = this.transport.tickProgress();
-    this.arena.update(time, Phaser.Math.Linear(this.prevRing, this.curRing, alpha) / FP);
-    this.syncCars(state, alpha, time);
+    this.view = this.transport.view();
+    this.arena.update(time, this.view.ringRadius / FP);
+    this.syncCars(state, time);
     this.hud.update(state, this.transport.playerId);
     this.syncCountdown(state);
     this.syncOverlay(state);
-    this.debug?.update(state, this.transport.playerId, this.game.loop.actualFps, this.transport.isPaused(), (id) => this.screenPos(id, alpha));
+    this.debug?.update(state, this.transport.playerId, this.game.loop.actualFps, this.transport.isPaused(), (id) => this.screenPos(id), this.transport.netStats?.());
   }
 
-  /** Keeps the poses of the last two ticks; a new round starts without sliding from the old spots. */
-  private snapshot(state: Readonly<GameState>): void {
-    if (state.tick === this.lastTick) return;
-    const fresh = this.lastTick < 0 || state.tick - this.lastTick > 1 || (state.phase === 'playing' && state.roundTick <= 1);
-    this.lastTick = state.tick;
-    this.prevPose.clear();
-    for (const [id, pose] of this.curPose) this.prevPose.set(id, pose);
-    this.curPose.clear();
-    for (const p of Object.values(state.players)) this.curPose.set(p.id, { x: p.x, y: p.y, heading: p.heading });
-    if (fresh) for (const [id, pose] of this.curPose) this.prevPose.set(id, pose);
-    this.prevRing = fresh ? state.ringRadius : this.curRing;
-    this.curRing = state.ringRadius;
+  private screenPos(id: string): { x: number; y: number; angle: number } | undefined {
+    const pose = this.view.poses.get(id);
+    if (!pose) return undefined;
+    return { x: toScreenX(pose.x), y: toScreenY(pose.y), angle: (pose.heading / ANGLE_STEPS) * Math.PI * 2 };
   }
 
-  private screenPos(id: string, alpha: number): { x: number; y: number; angle: number } | undefined {
-    const cur = this.curPose.get(id);
-    if (!cur) return undefined;
-    const prev = this.prevPose.get(id) ?? cur;
-    const heading = prev.heading + angleDiff(prev.heading, cur.heading) * alpha;
-    return {
-      x: toScreenX(Phaser.Math.Linear(prev.x, cur.x, alpha)),
-      y: toScreenY(Phaser.Math.Linear(prev.y, cur.y, alpha)),
-      angle: (heading / ANGLE_STEPS) * Math.PI * 2,
-    };
-  }
-
-  private syncCars(state: Readonly<GameState>, alpha: number, time: number): void {
+  private syncCars(state: Readonly<GameState>, time: number): void {
     for (const p of Object.values(state.players)) {
       let car = this.cars.get(p.id);
       if (!car) {
@@ -235,7 +204,7 @@ export class GameScene extends Phaser.Scene {
         // Joined as a spectator of this round, or already off the ring.
         if (state.phase !== 'lobby' && !p.alive) car.setVisible(false);
       }
-      const pos = this.screenPos(p.id, alpha);
+      const pos = this.screenPos(p.id);
       if (pos && (p.alive || car.isOut())) car.setPose(pos.x, pos.y, pos.angle, p, time);
     }
     for (const [id, car] of this.cars) {
@@ -257,13 +226,12 @@ export class GameScene extends Phaser.Scene {
           vibrate(Math.min(60, 15 + 10 * strength));
         }
       } else if (e.type === 'boost') {
-        const p = state.players[e.playerId];
-        if (p) boostPuff(this, toScreenX(p.x), toScreenY(p.y), (p.heading / ANGLE_STEPS) * Math.PI * 2);
+        const pos = this.screenPos(e.playerId);
+        if (pos) boostPuff(this, pos.x, pos.y, pos.angle);
       } else if (e.type === 'out') {
         this.onOut(state, e.playerId, e.byId);
       } else if (e.type === 'roundStart') {
         for (const car of this.cars.values()) car.reset();
-        this.lastTick = -1;
       } else if (e.type === 'roundEnd' && e.winnerId === meId) {
         vibrate(80);
       }
@@ -273,8 +241,10 @@ export class GameScene extends Phaser.Scene {
   private onOut(state: Readonly<GameState>, playerId: string, byId: string): void {
     const p = state.players[playerId];
     if (!p) return;
-    const x = toScreenX(p.x);
-    const y = toScreenY(p.y);
+    // Where the car is drawn (online the own car runs ahead of the state, the others behind).
+    const pos = this.screenPos(playerId);
+    const x = pos?.x ?? toScreenX(p.x);
+    const y = pos?.y ?? toScreenY(p.y);
     this.cars.get(playerId)?.playOut();
     outBurst(this, x, y, PLAYER_COLORS[p.slot]!);
     if (playerId === this.transport.playerId) vibrate(120);
@@ -462,7 +432,7 @@ export class GameScene extends Phaser.Scene {
     return 'Sigur ieși?\nRămâi în clasament ca „a ieșit”.';
   }
 
-  /** For good. Online (stage 4) the server then applies leavePlayer; offline the game just ends. */
+  /** For good. Online the server then applies leavePlayer; offline the game just ends. */
   private leaveMatch(): void {
     this.transport.dispose();
     const data: MenuSceneData = {};

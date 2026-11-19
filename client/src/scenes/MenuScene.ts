@@ -95,7 +95,7 @@ export class MenuScene extends Phaser.Scene {
       el('h2', { text: 'Creează joc' }),
       el('p', { text: `Invită până la ${MAX_PLAYERS - 1} prieteni` }),
       this.createButton,
-      onlineEnabled ? null : el('p', { class: 'soon', text: 'Disponibil în curând' }),
+      onlineEnabled ? null : el('p', { class: 'soon', text: 'Doar offline în această versiune' }),
     ]);
     card.addEventListener('click', (e) => {
       if (e.target !== this.createButton) this.onCreateRoom();

@@ -14,7 +14,8 @@ export type ClientMessage =
   | { type: 'setBotLevel'; botId: string; level: number } // host, lobby: one bot's level
   | { type: 'start' } // host: lobby -> round 1
   | { type: 'lobby' } // host: finished -> back to the lobby ("Încă un meci")
-  | { type: 'skipRound' }; // host, only while onlyBotsAlive
+  | { type: 'skipRound' } // host, only while onlyBotsAlive
+  | { type: 'ping'; t: number }; // answered with MSG_PONG carrying the same t
 
 /**
  * Server-side input queue per player. Beyond this many waiting inputs the oldest are dropped,
@@ -28,6 +29,12 @@ export interface TickEvents {
   /** The state tick these events belong to; clients play them once their state reaches it. */
   tick: number;
   events: GameEvent[];
+}
+
+/** Server -> one client: the answer to a 'ping', for the round-trip time. */
+export const MSG_PONG = 'pong';
+export interface Pong {
+  t: number;
 }
 
 /** Error codes the room rejects joins/creates with (Colyseus ServerError codes). */

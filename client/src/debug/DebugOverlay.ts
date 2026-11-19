@@ -12,9 +12,11 @@ import {
   type BotThought,
   type GameState,
 } from '@masinute/shared';
+import type { NetStats } from '../net/GameTransport';
 import { ARENA_CX, ARENA_CY, ARENA_R, DEPTH, FONT, GAME_H, toScreenX, toScreenY } from '../render/layout';
 
-// Enabled with ?debug: hitboxes, velocity and heading, each bot's intent and target, tick/FPS.
+// Enabled with ?debug: hitboxes, velocity and heading, each bot's intent and target, tick/FPS;
+// online also ping, the prediction error being smoothed out, unconfirmed inputs, big corrections.
 
 const INTENTS: Record<BotIntent, { label: string; color: number }> = {
   wait: { label: 'așteaptă', color: 0xaaaaaa },
@@ -49,7 +51,7 @@ export class DebugOverlay {
       .setDepth(DEPTH.debug + 1);
   }
 
-  update(state: Readonly<GameState>, meId: string, fps: number, paused: boolean, screenPos: ScreenPos): void {
+  update(state: Readonly<GameState>, meId: string, fps: number, paused: boolean, screenPos: ScreenPos, net?: NetStats): void {
     // Bot thinking is pure, so it can be recomputed here from any state (local or remote).
     if (state.tick !== this.lastTick) {
       this.lastTick = state.tick;
@@ -105,6 +107,12 @@ export class DebugOverlay {
       const speed = Math.hypot(me.vx, me.vy);
       lines.push(
         `eu: viteză ${((speed * TICK_RATE) / FP).toFixed(0)} px/s (înainte ${((forwardSpeed(me) * TICK_RATE) / FP).toFixed(0)})  steer ${me.steer} throttle ${me.throttle}  boost ${me.boostTicks}/${me.boostCooldown}  alunecare ${me.slideTicks}  seq ${me.lastSeq}`,
+      );
+    }
+    if (net) {
+      const sim = net.lagMs || net.jitterMs ? `  (simulat +${net.lagMs}±${net.jitterMs} ms)` : '';
+      lines.push(
+        `net: ping ${net.pingMs} ms${sim}  eroare predicție ${net.predictionErrorPx.toFixed(1)} px  neconfirmate ${net.unconfirmed}  corecții mari ${net.bigCorrectionsPerSecond}/s`,
       );
     }
     this.info.setText(lines.join('\n'));

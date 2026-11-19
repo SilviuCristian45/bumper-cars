@@ -1,0 +1,165 @@
+import { Room, ServerError, type Client } from '@colyseus/core';
+import {
+  addBot,
+  addPlayer,
+  backToLobby,
+  createGameState,
+  ERR_IN_PROGRESS,
+  ERR_ROOM_FULL,
+  ERR_SERVER_FULL,
+  generateRoomCode,
+  InputQueue,
+  leavePlayer,
+  MAX_PLAYERS,
+  MSG_EVENTS,
+  MSG_PONG,
+  parseInput,
+  removeBot,
+  runTick,
+  setBotLevel,
+  setConnected,
+  setDefaultBotLevel,
+  setRounds,
+  skipBotRound,
+  startMatch,
+  TICK_RATE,
+  type GameEvent,
+  type GameState,
+  type Pong,
+  type RoomStatus,
+  type TickEvents,
+} from '@masinute/shared';
+import { MAX_MESSAGES_PER_SECOND, MAX_ROOMS, RECONNECT_SECONDS } from './config';
+import { mirror } from './mirror';
+import { isCodeTaken, registerRoom, roomCount, unregisterRoom } from './registry';
+import { RoomState } from './schema';
+
+interface JoinOptions {
+  name?: unknown;
+}
+
+/**
+ * One game room. Authoritative: clients only send inputs and lobby intents; the room runs the
+ * shared simulation at TICK_RATE and sends one state patch per tick (each carries its tick and
+ * every player's last processed input seq, which the clients reconcile their prediction with).
+ */
+export class MasinuteRoom extends Room<{ state: RoomState }> {
+  private game!: GameState;
+  private readonly inputQueue = new InputQueue();
+  /** Events produced outside a tick (leaving players, skipped rounds), sent with the next one. */
+  private pendingEvents: GameEvent[] = [];
+  private botCounter = 0;
+
+  onCreate(): void {
+    if (roomCount() >= MAX_ROOMS) throw new ServerError(ERR_SERVER_FULL, 'Serverul e plin');
+    // Room codes double as Colyseus room ids, so players join with joinById(code).
+    const code = generateRoomCode(Math.random, isCodeTaken);
+    this.roomId = code;
+    registerRoom(code, this);
+
+    this.maxClients = MAX_PLAYERS;
+    this.autoDispose = true;
+    this.maxMessagesPerSecond = MAX_MESSAGES_PER_SECOND;
+
+    this.game = createGameState({ code, seed: Math.random().toString(36).slice(2) });
+    this.state = new RoomState();
+    mirror(this.game, this.state);
+
+    this.onMessage('input', (client, msg: unknown) => {
+      if (this.game.phase !== 'playing') return;
+      const input = parseInput(msg);
+      // The player id always comes from the connection, never from the message.
+      if (input) this.inputQueue.push(client.sessionId, input);
+    });
+    this.onMessage('ping', (client, msg: { t?: unknown }) => {
+      if (typeof msg?.t === 'number' && Number.isFinite(msg.t)) client.send(MSG_PONG, { t: msg.t } satisfies Pong);
+    });
+    // Lobby actions: the shared functions check that the sender is the host and the room is in the lobby.
+    this.onMessage('rounds', (client, msg: { rounds?: unknown }) => {
+      if (typeof msg?.rounds === 'number') setRounds(this.game, client.sessionId, msg.rounds);
+    });
+    this.onMessage('addBot', (client) => {
+      addBot(this.game, client.sessionId, `bot${++this.botCounter}`);
+    });
+    this.onMessage('removeBot', (client) => {
+      removeBot(this.game, client.sessionId);
+    });
+    this.onMessage('botLevel', (client, msg: { level?: unknown }) => {
+      if (typeof msg?.level === 'number') setDefaultBotLevel(this.game, client.sessionId, msg.level);
+    });
+    this.onMessage('setBotLevel', (client, msg: { botId?: unknown; level?: unknown }) => {
+      if (typeof msg?.botId === 'string' && typeof msg.level === 'number') {
+        setBotLevel(this.game, client.sessionId, msg.botId, msg.level);
+      }
+    });
+    this.onMessage('start', async (client) => {
+      if (startMatch(this.game, client.sessionId)) await this.lock();
+    });
+    this.onMessage('lobby', async (client) => {
+      if (backToLobby(this.game, client.sessionId)) await this.unlock();
+    });
+    // Online a round may be fast-forwarded only by the host, and only once every human is out.
+    this.onMessage('skipRound', (client) => {
+      if (client.sessionId !== this.game.hostId) return;
+      this.inputQueue.clear();
+      this.pendingEvents.push(...skipBotRound(this.game));
+    });
+    this.onMessage('*', () => {
+      // unknown message types are ignored
+    });
+
+    this.setFixedTimestep(() => this.tick(), TICK_RATE);
+    // No patch timer: tick() sends a patch right after every simulation step. Only after
+    // setFixedTimestep: without a simulation loop, Colyseus would start a second timer that
+    // advances the room clock on its own, and the fixed-step loop would barely ever step.
+    this.patchRate = null;
+  }
+
+  onJoin(client: Client, options?: JoinOptions): void {
+    const name = typeof options?.name === 'string' ? options.name : '';
+    const result = addPlayer(this.game, client.sessionId, name);
+    if (!result.ok) {
+      if (result.reason === 'in-progress') throw new ServerError(ERR_IN_PROGRESS, 'Meciul e în desfășurare');
+      throw new ServerError(ERR_ROOM_FULL, 'Jocul e plin');
+    }
+    mirror(this.game, this.state);
+  }
+
+  onDrop(client: Client): void {
+    setConnected(this.game, client.sessionId, false);
+    // Rejected when the window runs out (onLeave follows) or the room is shutting down.
+    this.allowReconnection(client, RECONNECT_SECONDS).catch(() => undefined);
+  }
+
+  onReconnect(client: Client): void {
+    setConnected(this.game, client.sessionId, true);
+  }
+
+  /** Gone for good: a consented leave, or the reconnection window expired. */
+  onLeave(client: Client): void {
+    this.pendingEvents.push(...leavePlayer(this.game, client.sessionId));
+    this.inputQueue.remove(client.sessionId);
+  }
+
+  onDispose(): void {
+    unregisterRoom(this.roomId);
+  }
+
+  /** Read by GET /rooms/:code to explain why a join was refused. */
+  status(): RoomStatus {
+    if (this.game.phase !== 'lobby') return 'playing';
+    return Object.keys(this.game.players).length >= MAX_PLAYERS ? 'full' : 'open';
+  }
+
+  private tick(): void {
+    const events = this.pendingEvents;
+    this.pendingEvents = [];
+    // Inputs only count while a round is being played; nothing moves in the lobby.
+    if (this.game.phase !== 'playing') this.inputQueue.clear();
+    if (this.game.phase !== 'lobby') events.push(...runTick(this.game, this.inputQueue.take()));
+    mirror(this.game, this.state);
+    // The patch first: clients hold a tick's events until their state has reached it.
+    this.broadcastPatch();
+    if (events.length > 0) this.broadcast(MSG_EVENTS, { tick: this.game.tick, events } satisfies TickEvents);
+  }
+}
