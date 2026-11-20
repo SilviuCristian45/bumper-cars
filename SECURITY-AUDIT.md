@@ -32,6 +32,66 @@ M3 primul pentru că orice limită per IP fără el e ocolită cu un header.
 
 ---
 
+## Faza 2: ce s-a reparat (2026-11-20)
+
+Commit-uri `6fafdb7` (M3, C1, M2, D4), `3fa8153` (M1), `44f3174` (D2, m1), `d25e14c` (D1, m2, m4),
+`cbc6e3b` (D3, M3 în Caddy, m3, m5: pregătite în `deploy/`). Teste: `server/test/security.test.ts` (29),
+`shared/test/match.test.ts` (porecle); toate trec (shared 136, client 5, server 70), typecheck curat.
+
+| # | Stare | Ce s-a făcut |
+|---|---|---|
+| M3 | reparat în cod; Caddy pregătit | `server/src/clientIp.ts`: adresa vine doar din **ultimul** element `X-Forwarded-For` (cel pus de Caddy) și doar de la loopback; IPv6 pe /64. `context.ip` din Colyseus nu e folosit. Fără Caddy în față (dev, teste, curl pe VPS): limitele per IP sunt oprite și se loghează un avertisment (cel mult o dată la 10 min). Caddy: `header_up X-Real-IP {remote_host}`, `header_up -X-Client-IP`. Merge corect și înainte de schimbarea Caddy, pentru că Caddy suprascrie deja `X-Forwarded-For` |
+| C1 | reparat | `static onAuth` pune cheia IP în opțiuni, `onCreate` refuză a 5-a cameră vie a aceleiași adrese (`ERR_TOO_MANY_ROOMS`, mesaj românesc); maxim 6 creări/minut/adresă |
+| M2 | reparat | `server/src/guard.ts` în fața listener-elor Colyseus: rate limit per adresă (matchmake 30+60/min, `/rooms` 20/min, `/leaderboard` 30/min, deschideri WS 30+60/min), maxim 24 WebSocket-uri deschise per adresă, `Origin` doar `https://masinute-balci.duckdns.org` (plus localhost în afara producției), CORS fără `Allow-Credentials`; 429 cu `Retry-After` |
+| D4 | reparat | lobby fără Start închis după 20 min (`CLOSE_LOBBY_IDLE`, „Jocul a fost închis: a stat prea mult în lobby…”) |
+| M1 | reparat | `setPrivate(true)` + doar `create`/`joinById`/`reconnect` expuse |
+| D2 | reparat | fiecare adresă are 20 de coduri inexistente, apoi 4/min (join, reconnect, `/rooms/:code`); după epuizare **nici codurile reale nu primesc răspuns**, deci nu se poate distinge o nimereală. 5 greșeli de tastare la rând încă merg |
+| m1 | reparat | coduri din `crypto.randomInt`, seed din `crypto.randomBytes` |
+| D1 | parțial (cum s-a cerut) | porecle normalizate (NFC, ș/ț cu virgulă, majuscule în `nameKey`, fără caractere invizibile/de control, zalgo maxim 2 semne); migrația 2 unește rândurile vechi cu ş/ţ; maxim 30 de **meciuri** salvate per adresă pe zi UTC (jucătorii de la o adresă peste limită sunt lăsați afară din salvare, ceilalți intră). Fără proprietate a poreclei |
+| m2 | reparat | vezi D1; plus nume deja luat în cameră → „Ana 2” |
+| m4 | reparat | porecla brută e tăiată înainte de procesare; `onAuth` refuză opțiuni care nu sunt obiect |
+| D3 | pregătit, neaplicat | header-e în `deploy/Caddyfile`: HSTS, nosniff, Referrer-Policy, X-Frame-Options, Permissions-Policy, **CSP Report-Only** cu `report-uri /colyseus/csp-report` (serverul scrie încălcările în jurnal) |
+| m3 | pregătit, neaplicat | Caddy răspunde 404 la `/colyseus/health`, `/colyseus/__healthcheck`, `/colyseus/` (versiunea Colyseus); `push.ps1` verifică acum `/colyseus/leaderboard` |
+| m5 | pregătit, neaplicat | `deploy/masinute.service`: rețea doar loopback (`IPAddressDeny=any`/`IPAddressAllow=localhost`), fără capabilități, `ProtectProc`, `SystemCallFilter=@system-service` (EPERM, nu kill), `UMask=0077` etc. |
+
+**Atac înainte / după, verificat local** (același script, trimis „ca prin Caddy”, contra codului de la
+`4b6456a` pe portul 2571 și contra codului nou pe 2570):
+
+| Atac | Înainte | După |
+|---|---|---|
+| C1+M3: camere create de o adresă din 25 (cu `X-Real-IP` nou la fiecare) | 20 (server plin) | 4 |
+| M1: `join` fără cod | 200, intrat în camera altcuiva | refuzat (520) |
+| M2: WebSocket-uri acceptate de la o adresă din 40 | 40 | 24 |
+| M2: create de pe `https://evil.example` | CORS reflectat cu `Allow-Credentials: true` | 403, fără CORS |
+| M2: WebSocket de pe `https://evil.example` | 101 | 403 |
+| D2: coduri ghicite care primesc răspuns din 60 | 60 | 20 |
+
+**CSP verificat local:** build-ul de producție servit cu exact header-ul din `deploy/Caddyfile` (forțat, nu
+Report-Only, ca o încălcare să se și vadă), Chrome headless dirijat prin DevTools: intro → nume → meniu →
+Creează (online) → lobby → +Bot → Start → joc; meci offline cu boți și power-up-uri; Clasament. Desktop și
+telefon emulat (844×390, touch, `?touch`): **0 încălcări, 0 excepții**. Control negativ: o imagine de pe alt
+domeniu a fost blocată și raportul a ajuns în jurnalul serverului prin `/colyseus/csp-report`.
+
+**Rămas:**
+- de aplicat pe VPS, cu acordul tău: Caddy (`caddy-update.sh`, comenzile în `deploy/README.md`), apoi `push.ps1`,
+  apoi `setup.sh` pentru unit-ul systemd + `systemd-analyze security masinute`;
+- `deploy/Caddyfile` nu a fost validat cu un Caddy real local (descărcarea a fost blocată); `caddy-update.sh`
+  rulează `caddy validate` pe VPS înainte să scrie și are `--dry-run`;
+- CSP pe un telefon real, după deploy: `journalctl -u masinute | grep CSP:`; apoi trecerea la
+  `Content-Security-Policy`;
+- D1: un jucător care stă pe loc tot meciul (tab de umplutură) încă face meciul să conteze; propunere: un om
+  contează doar dacă a jucat efectiv;
+- i1: log de acces Caddy (neinclus: date personale + verificarea directorului `/var/log/caddy`);
+- limitele per adresă sunt în memorie: un restart (deploy) le golește, inclusiv cota zilnică de clasament.
+
+**Incident în timpul fazei 2:** o comandă locală de editare a README-ului a executat accidental, prin
+backtick-uri interpretate de shell, `ssh oracle "rm -rf ~/masinute-deploy"`. Pe VPS a fost șters doar folderul
+`/home/ubuntu/masinute-deploy` (copia lui `deploy/` de la ultimul `setup.sh`); serviciul, baza de date, Caddy,
+Bombe și trenul nu au fost atinse, iar comenzile următoare au eșuat fără efect. Folderul se recreează la pasul 1
+din procedura Caddy.
+
+---
+
 ## C1 (critic): blocarea serverului cu 20 de camere goale
 
 **Unde:** `server/src/MasinuteRoom.ts:68` (`if (roomCount() >= MAX_ROOMS) throw ...`), `server/src/config.ts:8`
