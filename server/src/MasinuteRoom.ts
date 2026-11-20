@@ -1,3 +1,4 @@
+import { randomBytes, randomInt } from 'node:crypto';
 import { Room, ServerError, type AuthContext, type Client, type Delayed } from '@colyseus/core';
 import {
   addBot,
@@ -18,6 +19,7 @@ import {
   MSG_RECORDS,
   parseInput,
   removeBot,
+  ROOM_CODE_ALPHABET,
   runTick,
   setBotLevel,
   setConnected,
@@ -86,7 +88,8 @@ export class MasinuteRoom extends Room<{ state: RoomState }> {
     const ownerIp = clientIpOf(options);
     if (ownerIp && roomsOwnedBy(ownerIp) >= MAX_ROOMS_PER_IP) throw new ServerError(ERR_TOO_MANY_ROOMS, 'Prea multe jocuri de la aceeași adresă');
     // Room codes double as Colyseus room ids, so players join with joinById(code).
-    const code = generateRoomCode(Math.random, isCodeTaken);
+    // From crypto: Math.random could be predicted from the codes of rooms one creates oneself.
+    const code = generateRoomCode(() => (randomInt(ROOM_CODE_ALPHABET.length) + 0.5) / ROOM_CODE_ALPHABET.length, isCodeTaken);
     this.roomId = code;
     registerRoom(code, this, ownerIp);
     // Out of the public listing: only someone with the code (joinById) finds the room.
@@ -96,7 +99,7 @@ export class MasinuteRoom extends Room<{ state: RoomState }> {
     this.autoDispose = true;
     this.maxMessagesPerSecond = MAX_MESSAGES_PER_SECOND;
 
-    this.game = createGameState({ code, seed: Math.random().toString(36).slice(2) });
+    this.game = createGameState({ code, seed: randomBytes(8).toString('hex') });
     this.state = new RoomState();
     mirror(this.game, this.state);
 

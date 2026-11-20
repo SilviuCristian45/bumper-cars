@@ -248,6 +248,48 @@ describe('M1: nobody gets into a room without its code', () => {
   });
 });
 
+describe('D2 + m1: room codes cannot be guessed or predicted', () => {
+  it(`stops answering about codes after ${RATES.unknownCode.burst} unknown ones from one address, even for a real code`, async () => {
+    const real = (await createRoom(viaCaddy(freshIp()))).body!.roomId!;
+    const ip = freshIp();
+    // Before, every guess got an answer: an oracle for scanning all 31^6 codes.
+    for (let i = 0; i < RATES.unknownCode.burst / 2; i++) {
+      expect((await http('GET', `/rooms/ZZZZ${i % 10}${i % 9}`, viaCaddy(ip))).body?.status).toBe('missing');
+      expect((await http('POST', `/matchmake/joinById/ZZZY${i % 10}${i % 9}`, viaCaddy(ip), { name: 'X' })).status).not.toBe(200);
+    }
+    // Now the guesses are spent: no answer either way, so a hit cannot be told from a miss.
+    for (const path of [`/rooms/${real}`, '/rooms/ZZZZZZ']) {
+      const res = await http('GET', path, viaCaddy(ip));
+      expect(res.status).toBe(429);
+      expect(res.body?.code).toBe(ERR_RATE_LIMITED);
+    }
+    expect((await http('POST', `/matchmake/joinById/${real}`, viaCaddy(ip), { name: 'X' })).status).toBe(429);
+    expect((await http('POST', `/matchmake/reconnect/${real}`, viaCaddy(ip), {})).status).toBe(429);
+    // Another address, and real codes, are unaffected.
+    expect((await http('POST', `/matchmake/joinById/${real}`, viaCaddy(freshIp()), { name: 'Ion' })).status).toBe(200);
+  });
+
+  it('lets friends mistype a few codes without being locked out', async () => {
+    const real = (await createRoom(viaCaddy(freshIp()))).body!.roomId!;
+    const ip = freshIp();
+    // A typo in the menu costs two guesses (the join, then /rooms/:code for the message).
+    for (let i = 0; i < 5; i++) {
+      await http('POST', `/matchmake/joinById/QQQQQ${i}`, viaCaddy(ip), { name: 'Ion' });
+      await http('GET', `/rooms/QQQQQ${i}`, viaCaddy(ip));
+    }
+    expect((await http('POST', `/matchmake/joinById/${real}`, viaCaddy(ip), { name: 'Ion' })).status).toBe(200);
+  });
+
+  it('draws room codes and seeds from crypto, not Math.random', async () => {
+    const { readFile } = await import('node:fs/promises');
+    const source = await readFile(new URL('../src/MasinuteRoom.ts', import.meta.url), 'utf8');
+    expect(source.replace(/\/\/.*$/gm, '')).not.toMatch(/Math\.random/); // comments aside
+    const codes = new Set<string>();
+    for (let i = 0; i < 4; i++) codes.add((await createRoom({})).body!.roomId!);
+    expect(codes.size).toBe(4);
+  });
+});
+
 describe('D4: a lobby nobody starts is closed', () => {
   it('sends everyone back to the menu with CLOSE_LOBBY_IDLE and frees the room', async () => {
     const client = await colyseus.sdk.create(ROOM_NAME, { name: 'Ana' });
