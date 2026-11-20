@@ -1,4 +1,5 @@
 import type * as THREE from 'three';
+import type { NetStats } from '@client/net/GameTransport';
 import { el } from '@client/ui/el';
 
 const REFRESH_MS = 500;
@@ -20,6 +21,8 @@ export class PerfOverlay {
   constructor(
     private readonly renderer: THREE.WebGLRenderer,
     private readonly label: string,
+    /** Online: ping and prediction numbers. */
+    private readonly net: () => NetStats | undefined = () => undefined,
   ) {
     this.node = el('div', { class: 'perf' });
     document.body.append(this.node);
@@ -48,11 +51,25 @@ export class PerfOverlay {
       `${this.last.fps} fps  ${this.last.frameMs.toFixed(1)} ms (max ${this.last.worstMs.toFixed(0)})\n` +
       `cpu ${this.last.workMs.toFixed(2)} ms\n` +
       `draw ${info.calls}  tri ${info.triangles}\n` +
-      `${this.label} ${canvas.width}×${canvas.height} @${this.renderer.getPixelRatio().toFixed(2)}`;
+      `${this.label} ${canvas.width}×${canvas.height} @${this.renderer.getPixelRatio().toFixed(2)}` +
+      netLine(this.net());
     this.frames = 0;
     this.sumGap = 0;
     this.maxGap = 0;
     this.sumWork = 0;
     this.windowStart = now;
   }
+
+  dispose(): void {
+    this.node.remove();
+  }
+}
+
+function netLine(s: NetStats | undefined): string {
+  if (!s) return '';
+  const lag = s.lagMs || s.jitterMs ? `  (lag ${s.lagMs}+${s.jitterMs})` : '';
+  return (
+    `\nping ${Math.round(s.pingMs)} ms${lag}` +
+    `\npred ${s.predictionErrorPx.toFixed(1)} px  unconf ${s.unconfirmed}  big/s ${s.bigCorrectionsPerSecond}`
+  );
 }

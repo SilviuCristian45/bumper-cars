@@ -1,4 +1,4 @@
-import { el } from './dom';
+import { el } from './el';
 
 // A modal box over everything else, closed by its own buttons (or Esc when it has a cancel action).
 

@@ -1,48 +1,13 @@
-/* 3D probe: page, HUD, ?perf overlay. The touch controls' styles come with TouchInput (client/src/input/touch.css). */
+/* 3D client: HUD, game buttons, ?perf overlay. Page, screens, dialogs, toasts and the touch controls come from
+   the 2D client (client/src/style.css, screens.css, input/touch.css). */
 
-:root {
-  --text: #fff4d6;
-  --muted: #a99cc8;
-  --yellow: #ffd166;
-  --cyan: #4cc9f0;
-  --font: 'Trebuchet MS', 'Segoe UI', Verdana, sans-serif;
-  --sat: env(safe-area-inset-top, 0px);
-  --sar: env(safe-area-inset-right, 0px);
-  --sab: env(safe-area-inset-bottom, 0px);
-  --sal: env(safe-area-inset-left, 0px);
+/* The 3D canvas always fills the page (no letterboxing to keep clear of notches: the HUD does that). */
+#game {
+  padding: 0;
 }
 
-html,
-body {
-  margin: 0;
-  height: 100%;
-  background: #120a24;
-  color: var(--text);
-  font-family: var(--font);
-  overflow: hidden;
-  overscroll-behavior: none;
-  touch-action: none;
-  -webkit-user-select: none;
-  user-select: none;
-  -webkit-touch-callout: none;
-  -webkit-tap-highlight-color: transparent;
-}
-
-body {
-  position: fixed;
-  inset: 0;
-}
-
-#stage,
 #stage canvas {
-  position: absolute;
-  inset: 0;
   display: block;
-  touch-action: none;
-}
-
-[hidden] {
-  display: none !important;
 }
 
 .hud {
@@ -175,25 +140,35 @@ body {
   position: relative;
 }
 
-#cam-btn {
+/* Cameră / Pauză / Ieși, under the fullscreen icon (on the left with the left-handed layout). */
+.game-buttons {
   position: fixed;
   z-index: 15;
-  top: calc(var(--sat) + 10px);
+  top: calc(var(--sat) + 46px);
   right: calc(var(--sar) + 10px);
-  font: bold 14px var(--font);
-  color: var(--text);
-  background: rgba(36, 20, 70, 0.75);
-  border: 2px solid rgba(234, 242, 255, 0.35);
-  border-radius: 8px;
-  padding: 8px 12px;
-  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.game-buttons.left {
+  right: auto;
+  left: calc(var(--sal) + 10px);
+}
+
+.hud-records {
+  font-size: 18px;
+  font-weight: bold;
+  color: var(--yellow);
+  margin-top: 8px;
 }
 
 .perf {
   position: fixed;
   z-index: 30;
   right: calc(var(--sar) + 10px);
-  top: calc(var(--sat) + 54px);
+  top: calc(var(--sat) + 160px);
   white-space: pre;
   font: 12px/1.35 Consolas, Menlo, monospace;
   color: #b6ffb0;

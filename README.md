@@ -116,12 +116,16 @@ Pentru jocul online: `?lag=120&jitter=30` simulează o rețea lentă (120 ms în
 pe fiecare mesaj), iar `?online` păstrează meniurile ca `?debug` să arate și ping-ul, eroarea de predicție,
 inputurile neconfirmate și corecțiile mari pe secundă (de exemplu `?online&debug&lag=120&jitter=30`).
 
-## Proba 3D (branch `3d`)
+## Varianta 3D (branch `3d`)
 
-`npm run dev:3d` → http://localhost:5175/3d/ (de pe telefon: `http://<IP-ul PC-ului>:5175/3d/`). Meci offline cu boți,
-fără meniuri; aceleași opțiuni ca în 2D (`?bots=5&seed=abc&botlevel=greu`), plus `?perf` (FPS, timp pe cadru, draw
-calls, triunghiuri) și `?quality=low|high` (low implicit pe telefon). Tasta C (sau butonul „Cameră”) schimbă camera.
-Fără HMR: `npm run build:3d`, apoi `npm run preview:3d` → `http://<IP>:4175/3d/`.
+Aceleași meniuri, același lobby și aceleași camere ca jocul 2D: un jucător 2D și unul 3D intră cu același cod și joacă
+împreună. Pornește `npm run dev` (server + 2D) și `npm run dev:3d` → http://localhost:5175/3d/ (de pe telefon:
+`http://<IP-ul PC-ului>:5175/3d/`). Linkul de invitație dintr-un lobby 3D duce la `/3d/?room=COD`.
+
+Opțiunile de test din 2D merg și aici (`?bots=5&seed=abc&botlevel=greu` pornește direct un meci local), plus `?perf`
+(FPS, timp pe cadru, draw calls, triunghiuri, ping online) și `?quality=low|high`. În „Setări”: calitatea grafică
+și camera de la începutul meciului. Tasta C (sau butonul „Cameră”) schimbă camera; în camera din spate joystick-ul
+e rotit după cameră (sus = înainte). Fără HMR: `npm run build:3d`, apoi `npm run preview:3d` → `http://<IP>:4175/3d/`.
 
 ## Publicare
 

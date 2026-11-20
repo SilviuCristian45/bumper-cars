@@ -9,6 +9,7 @@ import {
   type GameEvent,
   type GameState,
 } from '@masinute/shared';
+import { isTouch } from '@client/device';
 import { el } from '@client/ui/el';
 import { POWERUP_INFO, hexColor } from '@client/render/powerupInfo';
 
@@ -22,6 +23,7 @@ export class Hud {
   private readonly scores: HTMLElement;
   private readonly banner: HTMLElement;
   private readonly sub: HTMLElement;
+  private readonly records: HTMLElement;
   private readonly boost: HTMLElement;
   private readonly boostFill: HTMLElement;
   private readonly cache = new Map<HTMLElement, string>();
@@ -36,13 +38,14 @@ export class Hud {
     this.scores = el('div', { class: 'hud-scores' });
     this.banner = el('div', { class: 'hud-banner' });
     this.sub = el('div', { class: 'hud-sub' });
+    this.records = el('div', { class: 'hud-records' });
     this.boostFill = el('div', { class: 'fill' });
     this.boost = el('div', { class: 'hud-boost' }, [this.boostFill, el('span', { text: 'BOOST' })]);
     this.boost.hidden = !showBoostBar;
     this.root = el('div', { class: 'hud' }, [
       this.scores,
       el('div', { class: 'hud-top' }, [this.round, this.effect]),
-      el('div', { class: 'hud-center' }, [this.banner, this.sub]),
+      el('div', { class: 'hud-center' }, [this.banner, this.sub, this.records]),
       this.boost,
     ]);
     document.body.append(this.root);
@@ -58,7 +61,8 @@ export class Hud {
     return me ? 1 - me.boostCooldown / BOOST_COOLDOWN_TICKS : 1;
   }
 
-  update(state: Readonly<GameState>, dt: number, paused: boolean): void {
+  /** finishedHint: what to do once the match is over; records: the all-time records line (online). */
+  update(state: Readonly<GameState>, dt: number, paused: boolean, finishedHint: string, records: string): void {
     const me = state.players[this.meId];
     this.text(this.round, state.phase === 'lobby' ? '' : `Runda ${state.round}/${state.roundsTotal}`);
 
@@ -71,7 +75,7 @@ export class Hud {
     let sub = '';
     if (paused) {
       banner = 'PAUZĂ';
-      sub = 'P ca să continui';
+      sub = isTouch ? 'Atinge „Continuă”' : 'P ca să continui';
     } else if (state.phase === 'playing' && state.roundTick < COUNTDOWN_TICKS) {
       banner = String(Math.ceil((COUNTDOWN_TICKS - state.roundTick) / TICK_RATE));
     } else if (state.phase === 'playing' && this.startShownFor > 0) {
@@ -92,10 +96,11 @@ export class Hud {
       const standings = computeStandings(state as GameState);
       const first = state.players[standings[0] ?? ''];
       banner = first ? (first.id === this.meId ? 'Ai câștigat meciul!' : `${first.name} câștigă meciul`) : 'Gata!';
-      sub = 'Enter sau atinge ecranul pentru încă un meci';
+      sub = finishedHint;
     }
     this.text(this.banner, banner);
     this.text(this.sub, sub);
+    this.text(this.records, state.phase === 'finished' ? records : '');
 
     this.updateScores(state);
     const ready = this.boostReady(state);

@@ -1,6 +1,5 @@
-import type Phaser from 'phaser';
-import { isMuted, toggleMute } from '../audio/sound';
-import { el, isTyping } from './dom';
+import { el } from './el';
+import { isTyping } from './html';
 import { fullscreenAvailable, isFullscreen, onFullscreenChange, toggleFullscreen } from './fullscreen';
 
 // Sound and fullscreen toggles in the top-right corner, over every screen from the intro on
@@ -24,20 +23,28 @@ function icon(markup: string): SVGSVGElement {
   return svg;
 }
 
-export function initChrome(game: Phaser.Game): void {
+/** The mute button's side of the sound (the 3D client has no sound yet: no button). */
+export interface SoundToggle {
+  isMuted(): boolean;
+  toggle(): void;
+}
+
+export function initChrome(sound?: SoundToggle): void {
   const bar = el('div', { class: 'chrome' });
-  const mute = el('button', { class: 'icon-btn', attrs: { type: 'button' } });
-  const syncMute = () => {
-    mute.replaceChildren(icon(isMuted() ? ICONS.soundOff : ICONS.soundOn));
-    mute.setAttribute('aria-label', isMuted() ? 'Pornește sunetul' : 'Oprește sunetul');
-  };
-  mute.addEventListener('click', () => {
-    toggleMute(game);
+  if (sound) {
+    const mute = el('button', { class: 'icon-btn', attrs: { type: 'button' } });
+    const syncMute = () => {
+      mute.replaceChildren(icon(sound.isMuted() ? ICONS.soundOff : ICONS.soundOn));
+      mute.setAttribute('aria-label', sound.isMuted() ? 'Pornește sunetul' : 'Oprește sunetul');
+    };
+    mute.addEventListener('click', () => {
+      sound.toggle();
+      syncMute();
+      mute.blur();
+    });
     syncMute();
-    mute.blur();
-  });
-  syncMute();
-  bar.append(mute);
+    bar.append(mute);
+  }
 
   // Not offered where the browser has no Fullscreen API (Safari on iPhone).
   if (fullscreenAvailable) {

@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { RING_RADIUS } from '@masinute/shared';
-import type { Quality } from './options';
+import type { Quality } from './settings3d';
 import { diamondPlate } from './textures';
-import { CEILING_Y, PLATFORM_DEPTH, toWorld } from './world';
+import { CEILING_Y, PLATFORM_DEPTH, toWorld } from './coords';
 
 const R = toWorld(RING_RADIUS);
 const RIM_TUBE = 9;
@@ -139,7 +139,7 @@ function ceilingNet(half: number, spacing: number): THREE.LineSegments {
   geom.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
   return new THREE.LineSegments(
     geom,
-    new THREE.LineBasicMaterial({ color: 0xb8a6e0, transparent: true, opacity: 0.22, depthWrite: false }),
+    new THREE.LineBasicMaterial({ color: 0xb8a6e0, transparent: true, opacity: 0.06, depthWrite: false }),
   );
 }
 

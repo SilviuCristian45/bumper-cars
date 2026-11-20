@@ -1,11 +1,13 @@
 import * as THREE from 'three';
-import { PU_GHOST, TICK_RATE, sortedPlayers, type GameEvent, type GameState } from '@masinute/shared';
+import { PLAYER_COLORS, PU_GHOST, TICK_RATE, sortedPlayers, type GameEvent, type GameState, type PlayerState } from '@masinute/shared';
 import type { RenderView } from '@client/net/view';
+import { reducedEffects } from '@client/settings';
 import { ANTENNA_BASE, CarView } from './Car';
-import type { Quality } from './options';
+import { Label } from './Label';
+import type { Quality } from './settings3d';
 import { GlowPoints, SparkBursts } from './Sparks';
 import { blobShadow, glowDot } from './textures';
-import { CEILING_Y, toWorld } from './world';
+import { CEILING_Y, toWorld } from './coords';
 
 const MAX_CARS = 6;
 /** A bump this strong (impulse) counts as a full-strength hit for hops, sparks and camera shake. */
@@ -15,7 +17,7 @@ const UP = new THREE.Vector3(0, 1, 0);
 /**
  * Every car plus what is drawn for all of them in one go: antenna poles (instanced), blob shadows
  * (instanced, only without real shadows), antenna sparks and boost flames (one Points each),
- * collision sparks, the marker over the player's own car.
+ * collision sparks; the name over each car ("TU" over the own one) and "zzz" over idle players.
  */
 export class CarLayer {
   readonly group = new THREE.Group();
@@ -25,7 +27,7 @@ export class CarLayer {
   private readonly antennaSparks: GlowPoints;
   private readonly flames: GlowPoints;
   private readonly sparks: SparkBursts;
-  private readonly marker: THREE.Mesh;
+  private readonly labels = new Map<string, { name: Label; zzz: Label }>();
   private readonly m = new THREE.Matrix4();
   private readonly q = new THREE.Quaternion();
   private readonly v = new THREE.Vector3();
@@ -34,8 +36,8 @@ export class CarLayer {
   private readonly size = new THREE.Vector3();
   private readonly zero = new THREE.Matrix4().makeScale(0, 0, 0);
   private clock = 0;
-  /** The marker over the own car (not on the chase camera, where it would sit right in front of the lens). */
-  showMarker = true;
+  /** "TU" over the own car (not on the chase camera, where it would sit right in front of the lens). */
+  showOwnLabel = true;
   /** Camera shake asked for by hits this frame (0..1), read and cleared by the camera. */
   shake = 0;
 
@@ -69,8 +71,6 @@ export class CarLayer {
     this.sparks = new SparkBursts(high ? 160 : 72, dot);
     this.group.add(this.antennaSparks.points, this.flames.points, this.sparks.object);
 
-    this.marker = new THREE.Mesh(new THREE.ConeGeometry(5, 9, 4).rotateX(Math.PI), new THREE.MeshBasicMaterial({ color: 0xffe066 }));
-    this.group.add(this.marker);
   }
 
   onEvents(events: readonly GameEvent[], state: Readonly<GameState>): void {
@@ -79,9 +79,12 @@ export class CarLayer {
       const strength = Math.min(1, e.force / HARD_HIT);
       this.cars.get(e.a)?.bump(strength);
       this.cars.get(e.b)?.bump(strength);
-      this.sparks.burst(toWorld(e.x), 14, toWorld(e.y), Math.round(6 + strength * (this.quality === 'high' ? 18 : 8)), 60 + strength * 160);
+      // Efecte reduse: fewer sparks, no camera shake.
+      const reduced = reducedEffects();
+      const extra = this.quality === 'high' && !reduced ? 18 : 8;
+      this.sparks.burst(toWorld(e.x), 14, toWorld(e.y), Math.round((reduced ? 4 : 6) + strength * extra), 60 + strength * 160);
       const mine = e.a === this.meId || e.b === this.meId;
-      if (strength > 0.35 && state.players[this.meId]) this.shake = Math.max(this.shake, mine ? strength : strength * 0.4);
+      if (!reduced && strength > 0.35 && state.players[this.meId]) this.shake = Math.max(this.shake, mine ? strength : strength * 0.4);
     }
   }
 
@@ -91,7 +94,12 @@ export class CarLayer {
     for (const [id, car] of this.cars) {
       if (state.players[id]) continue;
       this.group.remove(car.root);
+      car.dispose();
       this.cars.delete(id);
+      const labels = this.labels.get(id);
+      labels?.name.dispose();
+      labels?.zzz.dispose();
+      this.labels.delete(id);
     }
 
     let i = 0;
@@ -101,6 +109,7 @@ export class CarLayer {
         car = new CarView(p, this.quality);
         this.cars.set(p.id, car);
         this.group.add(car.root);
+        this.addLabels(p, car);
       }
       car.update(p, view.poses.get(p.id), dt);
 
@@ -121,7 +130,7 @@ export class CarLayer {
       car.root.visible = visible;
 
       this.drawExtras(i, car, p.boostTicks > 0, visible);
-      if (p.id === this.meId) this.placeMarker(car, this.showMarker && visible && !car.falling);
+      this.syncLabels(p, car);
       i++;
     }
     for (; i < MAX_CARS; i++) this.hideExtras(i);
@@ -185,11 +194,41 @@ export class CarLayer {
     this.flames.hide(i * 2 + 1);
   }
 
-  private placeMarker(car: CarView, visible: boolean): void {
-    this.marker.visible = visible;
-    if (!visible) return;
-    this.marker.position.set(car.root.position.x, 50 * car.scale + 8 + Math.sin(this.clock * 5) * 3, car.root.position.z);
-    this.marker.rotation.y = this.clock * 2;
+  private addLabels(p: Readonly<PlayerState>, car: CarView): void {
+    const mine = p.id === this.meId;
+    const color = mine ? '#ffe066' : '#' + PLAYER_COLORS[p.slot % PLAYER_COLORS.length]!.toString(16).padStart(6, '0');
+    const name = new Label(color, mine ? 0.8 : 1);
+    const zzz = new Label('#d8e2ff', 0.9);
+    zzz.setText('zzz');
+    car.root.add(name.sprite, zzz.sprite);
+    this.labels.set(p.id, { name, zzz });
+  }
+
+  /** Name (or "TU") over the car, "zzz" above it while that player sends nothing (the room marks them idle). */
+  private syncLabels(p: Readonly<PlayerState>, car: CarView): void {
+    const labels = this.labels.get(p.id);
+    if (!labels) return;
+    const mine = p.id === this.meId;
+    labels.name.setText(mine ? 'TU' : p.name);
+    const top = 44 * car.scale + 14;
+    labels.name.sprite.visible = !car.falling && (!mine || this.showOwnLabel);
+    labels.name.sprite.position.set(0, top, 0);
+    labels.zzz.sprite.visible = !car.falling && !mine && p.idle && p.alive;
+    labels.zzz.sprite.position.set(0, top + 16 + Math.sin(this.clock * 3) * 2, 0);
+  }
+
+  dispose(): void {
+    for (const car of this.cars.values()) car.dispose();
+    for (const { name, zzz } of this.labels.values()) {
+      name.dispose();
+      zzz.dispose();
+    }
+    this.group.traverse((o) => {
+      if (o instanceof THREE.Mesh || o instanceof THREE.Points) {
+        o.geometry.dispose();
+        (o.material as THREE.Material).dispose();
+      }
+    });
   }
 
   /** Where the player's car is drawn (camera target), or null when it has none. */

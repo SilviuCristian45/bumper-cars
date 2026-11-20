@@ -2,8 +2,8 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { MAX_SPEED, PLAYER_COLORS, RING_RADIUS, type PlayerState } from '@masinute/shared';
 import type { Pose } from '@client/net/view';
-import type { Quality } from './options';
-import { ease, headingToYaw, speedToWorld, toWorld } from './world';
+import type { Quality } from './settings3d';
+import { ease, headingToYaw, speedToWorld, toWorld } from './coords';
 
 /** Where the antenna leaves the car, in the car's own frame (x forward, z to the right, unscaled). */
 export const ANTENNA_BASE = new THREE.Vector3(-14, 36, 0);
@@ -147,6 +147,11 @@ export class CarView {
     this.body.rotation.set(0, 0, this.pitch);
     this.body.rotation.x = this.lean + Math.sin(this.hop * 0.15) * 0.06;
     this.body.scale.setScalar(this.scale);
+  }
+
+  dispose(): void {
+    this.mesh.geometry.dispose();
+    this.material.dispose();
   }
 
   setOpacity(opacity: number): void {

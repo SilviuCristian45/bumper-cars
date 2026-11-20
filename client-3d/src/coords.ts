@@ -1,4 +1,4 @@
-import { ANGLE_STEPS, FP, TICK_RATE } from '@masinute/shared';
+import { ANGLE_STEPS, FP, TICK_RATE, wrapAngle } from '@masinute/shared';
 
 // Simulation plane -> 3D world: 1 world unit = 1 simulation pixel, sim x -> world x, sim y -> world z
 // (the 2D screen's "down" points toward the default camera), floor at y = 0.
@@ -25,4 +25,18 @@ export function angleDelta(a: number, b: number): number {
   if (d > Math.PI) d -= 2 * Math.PI;
   if (d < -Math.PI) d += 2 * Math.PI;
   return d;
+}
+
+/** World direction on the floor (x, z) -> heading in angle steps (the inverse of headingToYaw's direction). */
+export function directionToHeading(x: number, z: number): number {
+  return (Math.atan2(z, x) / (2 * Math.PI)) * ANGLE_STEPS;
+}
+
+/**
+ * The heading the joystick should treat as the car's: TouchInput steers toward the stick's direction
+ * with screen up = heading 3/4 turn (as in 2D, where the screen is the world). Rotating by the camera's
+ * own heading makes screen up = straight ahead of the camera, so on the chase camera up = forward.
+ */
+export function joystickHeading(carHeading: number, cameraHeading: number): number {
+  return wrapAngle(Math.round(carHeading + (ANGLE_STEPS * 3) / 4 - cameraHeading));
 }

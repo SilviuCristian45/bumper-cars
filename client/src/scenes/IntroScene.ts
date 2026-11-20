@@ -1,30 +1,25 @@
 import Phaser from 'phaser';
 import { ensureTextures } from '../render/textures';
+import type { MenuData } from '../screens/host';
+import { showIntro } from '../screens/intro';
 import { drawBackdrop } from '../ui/backdrop';
-import { button, el, mountScreen, onKey, title } from '../ui/dom';
-import type { MenuSceneData } from './MenuScene';
+import { phaserHost } from './phaserHost';
 
-/** Title screen. Its click is also the user gesture browsers want before sound (stage 6). Next: the nickname. */
+/** Title screen (screens/intro.ts) over the night fair. */
 export class IntroScene extends Phaser.Scene {
-  private next!: MenuSceneData;
+  private next!: MenuData;
 
   constructor() {
     super('intro');
   }
 
-  init(data: MenuSceneData): void {
+  init(data: MenuData): void {
     this.next = data;
   }
 
   create(): void {
     ensureTextures(this);
     drawBackdrop(this);
-    const enter = button('Intră la bâlci', () => this.enter(), 'primary', 'big');
-    mountScreen(this, 'intro', [title(), el('p', { class: 'subtitle', text: 'Mașinuțe tamponate, noaptea, la bâlci' }), enter]);
-    onKey(this, 'Enter', () => this.enter());
-  }
-
-  private enter(): void {
-    this.scene.start('name', this.next);
+    showIntro(phaserHost(this), this.next);
   }
 }

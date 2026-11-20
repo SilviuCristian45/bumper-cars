@@ -4,7 +4,7 @@ import './screens.css';
 import { DEFAULT_ROUNDS, isValidRoomCode, MAX_PLAYERS, normalizeRoomCode, ROUND_OPTIONS } from '@masinute/shared';
 import { initMusic } from './audio/music';
 import { initSfx } from './audio/sfx';
-import { initMute } from './audio/sound';
+import { initMute, isMuted, toggleMute } from './audio/sound';
 import { parseBotLevel } from './botLevels';
 import { isTouch } from './device';
 import { LocalTransport } from './net/LocalTransport';
@@ -88,7 +88,7 @@ initMute(game);
 initSfx(game);
 initMusic(game);
 // HTML layers over the canvas: the sound and fullscreen icons and the rotate prompt (toasts and dialogs come and go).
-initChrome(game);
+initChrome({ isMuted, toggle: () => toggleMute(game) });
 initRotatePrompt();
 trackVisualViewport();
 game.scene.add('intro', IntroScene, !quick && !resume, menuData());

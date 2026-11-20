@@ -11,7 +11,7 @@ import {
   type GameState,
 } from '@masinute/shared';
 import { POWERUP_INFO } from '@client/render/powerupInfo';
-import { toWorld } from './world';
+import { toWorld } from './coords';
 
 const POP_SECONDS = 0.25;
 

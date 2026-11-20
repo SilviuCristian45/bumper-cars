@@ -1,5 +1,5 @@
-import Phaser from 'phaser';
-import { el } from './dom';
+import { el } from './el';
+import type { Lifetime } from './html';
 
 // The match (and later the lobby) is played sideways; a phone held upright gets "Rotește telefonul"
 // over them (CSS: body.touch.landscape-only in portrait). The menu and the name screen work both ways.
@@ -17,11 +17,11 @@ export function initRotatePrompt(): void {
   document.body.append(prompt);
 }
 
-/** For the scene's lifetime, portrait shows the rotate prompt. */
-export function requireLandscape(scene: Phaser.Scene): void {
+/** For as long as `life` lasts, portrait shows the rotate prompt. */
+export function requireLandscape(life: Lifetime): void {
   holders++;
   document.body.classList.add('landscape-only');
-  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+  life.onEnd(() => {
     holders--;
     if (holders === 0) document.body.classList.remove('landscape-only');
   });

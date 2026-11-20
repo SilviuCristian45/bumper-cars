@@ -1,21 +1,11 @@
 import { DEFAULT_ROUNDS, MAX_PLAYERS, ROUND_OPTIONS } from '@masinute/shared';
 import { parseBotLevel } from '@client/botLevels';
-import { isTouch } from '@client/device';
 import type { LocalOptions } from '@client/net/LocalTransport';
 
-// URL options of the 3D probe: the 2D quick-start ones (?bots, ?seed, ?botlevel, ?rounds, ?powerups,
-// ?pufreq; ?touch is read by device.ts) plus ?perf (numbers overlay) and ?quality=low|high.
+// URL options of the 3D client besides the 2D ones (client/src/urlOptions.ts): ?perf, and ?quality (settings3d.ts).
+// The quick-start match (?bots, ?seed, ?botlevel, ?rounds, ?powerups, ?pufreq) is set up here as in 2D.
 
 const params = new URLSearchParams(window.location.search);
-
-export type Quality = 'low' | 'high';
-
-/** ?quality=low|high; phones and tablets default to low. */
-export const quality: Quality = ((): Quality => {
-  const q = params.get('quality');
-  if (q === 'low' || q === 'high') return q;
-  return isTouch ? 'low' : 'high';
-})();
 
 /** ?perf: FPS, frame time, draw calls, triangles. */
 export const perf = params.has('perf');

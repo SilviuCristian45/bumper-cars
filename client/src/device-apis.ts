@@ -1,4 +1,4 @@
-import Phaser from 'phaser';
+import type { Lifetime } from './ui/html';
 
 // Screen Wake Lock: the phone screen stays on during the lobby and the match. Optional: browsers
 // without it (or pages without HTTPS) simply do without. Vibration lives in settings.ts.
@@ -27,11 +27,11 @@ async function release(): Promise<void> {
 // The browser drops the lock whenever the page is hidden; take it again on the way back.
 document.addEventListener('visibilitychange', () => void acquire());
 
-/** Keeps the screen on while the scene runs. */
-export function keepScreenOn(scene: Phaser.Scene): void {
+/** Keeps the screen on for as long as `life` lasts. */
+export function keepScreenOn(life: Lifetime): void {
   wanted++;
   void acquire();
-  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+  life.onEnd(() => {
     wanted--;
     if (wanted === 0) void release();
   });

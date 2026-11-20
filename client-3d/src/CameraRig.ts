@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { ANGLE_STEPS, RING_RADIUS } from '@masinute/shared';
-import { angleDelta, ease, toWorld } from './world';
+import { RING_RADIUS } from '@masinute/shared';
+import { angleDelta, directionToHeading, ease, joystickHeading, toWorld } from './coords';
 
 export type CameraMode = 'tilted' | 'chase';
 
@@ -14,12 +14,14 @@ const CHASE_BACK = 150;
 const CHASE_UP = 92;
 const CHASE_AHEAD = 140;
 const SHAKE_DECAY = 7;
+/** Behind the menus: a slow turn around the ring, radians per second. */
+const ORBIT_SPEED = 0.06;
 
 const R = toWorld(RING_RADIUS);
 
 /**
  * Tilted camera (~50°) that glides after the own car, the ring always in mind; or a chase camera behind
- * the car (C). Camera shake is an offset that decays.
+ * the car (C); behind the menus, a slow orbit. Camera shake is an offset that decays.
  */
 export class CameraRig {
   readonly camera: THREE.PerspectiveCamera;
@@ -31,6 +33,8 @@ export class CameraRig {
   private shake = 0;
   private time = 0;
   private snapped = false;
+  private orbitAngle = 0.6;
+  private readonly dir = new THREE.Vector3();
 
   constructor(aspect: number) {
     this.camera = new THREE.PerspectiveCamera(45, aspect, 5, 4000);
@@ -50,12 +54,23 @@ export class CameraRig {
     this.shake = Math.min(1, Math.max(this.shake, amount));
   }
 
-  /**
-   * Heading (angle steps) the joystick should treat as the car's direction on screen: the tilted camera
-   * never turns (screen up = sim -y, as in 2D), the chase camera always shows the car pointing up.
-   */
+  setMode(mode: CameraMode): void {
+    if (mode !== this.mode) this.toggle();
+  }
+
+  /** Heading the joystick should treat as the car's, so that screen up is where the camera looks (see joystickHeading). */
   screenHeading(carHeading: number): number {
-    return this.mode === 'chase' ? (ANGLE_STEPS * 3) / 4 : carHeading;
+    this.camera.getWorldDirection(this.dir);
+    return joystickHeading(carHeading, directionToHeading(this.dir.x, this.dir.z));
+  }
+
+  /** Behind the menus: circles the ring slowly, a little higher than in the game. */
+  orbit(dt: number): void {
+    this.orbitAngle += ORBIT_SPEED * dt;
+    const dist = 900;
+    this.camera.position.set(Math.sin(this.orbitAngle) * dist, 520, Math.cos(this.orbitAngle) * dist);
+    this.camera.lookAt(0, -40, 0);
+    this.snapped = false;
   }
 
   /** car: the own car's position and yaw, or null (out, or watching). */
