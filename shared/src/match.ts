@@ -3,10 +3,13 @@ import {
   BOT_LEVELS,
   BOT_NAMES,
   DEFAULT_BOT_LEVEL,
+  DEFAULT_POWERUP_FREQ,
   DEFAULT_ROUNDS,
   MAX_NAME_LENGTH,
   MAX_PLAYERS,
   MIN_PLAYERS_TO_START,
+  POWERUP_FREQ_MAX,
+  POWERUP_FREQ_MIN,
   RING_RADIUS,
   ROUND_OPTIONS,
   SPAWN_RADIUS,
@@ -38,6 +41,7 @@ export function createGameState(opts: CreateOptions): GameState {
     rng: seedFrom(opts.seed),
     joinCounter: 0,
     powerups: true,
+    puFreq: DEFAULT_POWERUP_FREQ,
     puTimer: 0,
     pu0Kind: 0,
     pu0X: 0,
@@ -249,6 +253,14 @@ export function setRounds(state: GameState, byId: string, rounds: number): boole
 export function setPowerups(state: GameState, byId: string, on: boolean): boolean {
   if (byId !== state.hostId || state.phase !== 'lobby' || typeof on !== 'boolean') return false;
   state.powerups = on;
+  return true;
+}
+
+/** Host, lobby: how often power-ups appear in the next match (1..5). */
+export function setPowerupFreq(state: GameState, byId: string, level: number): boolean {
+  if (byId !== state.hostId || state.phase !== 'lobby') return false;
+  if (!Number.isInteger(level) || level < POWERUP_FREQ_MIN || level > POWERUP_FREQ_MAX) return false;
+  state.puFreq = level;
   return true;
 }
 

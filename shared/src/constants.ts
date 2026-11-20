@@ -123,11 +123,26 @@ export const PU_GHOST = 9;
 export const POWERUP_KINDS: readonly number[] = [PU_HORN, PU_MICI, PU_LIFEBUOY, PU_OIL, PU_TUICA, PU_SPRINGS, PU_SODA, PU_PROTEIN, PU_GHOST];
 /** Power-ups lying on the ring at once (state slots pu0*, pu1*). */
 export const POWERUP_SLOTS = 2;
-/** The first one appears this long after START... */
-export const POWERUP_FIRST_TICKS = 10 * TICK_RATE;
-/** ...then one every 8-14 s (fighting time). */
-export const POWERUP_MIN_GAP_TICKS = 8 * TICK_RATE;
-export const POWERUP_MAX_GAP_TICKS = 14 * TICK_RATE;
+/** How often they appear: a lobby option (GameState.puFreq), 1 = rarely ... 5 = all the time. */
+export const POWERUP_FREQ_MIN = 1;
+export const POWERUP_FREQ_MAX = 5;
+export const DEFAULT_POWERUP_FREQ = 3;
+export interface PowerupTiming {
+  /** The first one appears this long after START... */
+  first: number;
+  /** ...then one every min..max ticks (fighting time). */
+  minGap: number;
+  maxGap: number;
+}
+/** Per frequency level (index = level); level 2 is the original pace. */
+export const POWERUP_TIMINGS: readonly PowerupTiming[] = [
+  { first: 10 * TICK_RATE, minGap: 8 * TICK_RATE, maxGap: 14 * TICK_RATE }, // unused (0)
+  { first: 12 * TICK_RATE, minGap: 12 * TICK_RATE, maxGap: 18 * TICK_RATE },
+  { first: 10 * TICK_RATE, minGap: 8 * TICK_RATE, maxGap: 14 * TICK_RATE },
+  { first: 7 * TICK_RATE, minGap: 5 * TICK_RATE, maxGap: 9 * TICK_RATE },
+  { first: 5 * TICK_RATE, minGap: 3 * TICK_RATE, maxGap: 6 * TICK_RATE },
+  { first: 3 * TICK_RATE, minGap: 2 * TICK_RATE, maxGap: 4 * TICK_RATE },
+];
 /** Not picked up in this long: it vanishes. */
 export const POWERUP_LIFETIME_TICKS = 10 * TICK_RATE;
 /** The last stretch of its life, during which clients make it blink. */

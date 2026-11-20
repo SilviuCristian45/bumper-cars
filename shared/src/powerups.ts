@@ -4,16 +4,16 @@ import {
   GHOST_SEPARATE_TICKS,
   POWERUP_CAR_CLEARANCE,
   POWERUP_EDGE_MARGIN,
-  POWERUP_FIRST_TICKS,
   POWERUP_KINDS,
   POWERUP_LIFETIME_TICKS,
-  POWERUP_MAX_GAP_TICKS,
-  POWERUP_MIN_GAP_TICKS,
   POWERUP_RADIUS,
   POWERUP_RETRY_TICKS,
   POWERUP_SLOTS,
   POWERUP_SPACING,
   POWERUP_SPAWN_TRIES,
+  POWERUP_TIMINGS,
+  DEFAULT_POWERUP_FREQ,
+  type PowerupTiming,
   PROTEIN_GROW_TICKS,
   PU_GHOST,
   PU_HORN,
@@ -79,10 +79,15 @@ export function livePowerups(state: Readonly<GameState>): (PowerupSlot & { slot:
   return out;
 }
 
-/** A fresh round (or the lobby): nothing on the ring, the first one due POWERUP_FIRST_TICKS after START. */
+/** When power-ups appear at the state's frequency level (the default level for anything out of range). */
+export function powerupTiming(state: Readonly<GameState>): PowerupTiming {
+  return POWERUP_TIMINGS[state.puFreq] ?? POWERUP_TIMINGS[DEFAULT_POWERUP_FREQ]!;
+}
+
+/** A fresh round (or the lobby): nothing on the ring, the first one due a little after START. */
 export function clearPowerups(state: GameState): void {
   for (let i = 0; i < POWERUP_SLOTS; i++) setPowerup(state, i, EMPTY);
-  state.puTimer = POWERUP_FIRST_TICKS;
+  state.puTimer = powerupTiming(state).first;
 }
 
 /** Ticks of an effect that lasts (instant ones, horn and oil, have none). */
@@ -196,7 +201,8 @@ export function powerupsAfterCollide(state: GameState, players: PlayerState[], e
   state.puTimer--;
   if (state.puTimer > 0) return;
   if (spawn(state, players, events)) {
-    state.puTimer = POWERUP_MIN_GAP_TICKS + nextInt(state, POWERUP_MAX_GAP_TICKS - POWERUP_MIN_GAP_TICKS + 1);
+    const { minGap, maxGap } = powerupTiming(state);
+    state.puTimer = minGap + nextInt(state, maxGap - minGap + 1);
   } else {
     state.puTimer = POWERUP_RETRY_TICKS;
   }

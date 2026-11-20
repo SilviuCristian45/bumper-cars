@@ -68,6 +68,7 @@ export const RoomState = schema(
     rng: t.uint32(),
     joinCounter: t.uint32(),
     powerups: t.boolean(),
+    puFreq: t.uint8(),
     puTimer: t.uint16(),
     pu0Kind: t.uint8(),
     pu0X: t.int32(),

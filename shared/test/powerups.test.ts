@@ -15,10 +15,11 @@ import {
   livePowerups,
   POWERUP_CAR_CLEARANCE,
   POWERUP_EDGE_MARGIN,
-  POWERUP_FIRST_TICKS,
+  DEFAULT_POWERUP_FREQ,
+  POWERUP_FREQ_MAX,
+  POWERUP_FREQ_MIN,
+  POWERUP_TIMINGS,
   POWERUP_LIFETIME_TICKS,
-  POWERUP_MAX_GAP_TICKS,
-  POWERUP_MIN_GAP_TICKS,
   powerupAt,
   PU_HORN,
   PU_LIFEBUOY,
@@ -30,6 +31,7 @@ import {
   RING_MIN_RADIUS,
   RING_RADIUS,
   runTick,
+  setPowerupFreq,
   setPowerups,
   setTuning,
   SHRINK_DURATION_TICKS,
@@ -139,21 +141,55 @@ describe('power-ups on', () => {
     expect(a.kinds.has('pickup')).toBe(true);
   });
 
-  it('first appear ~10 s after START, then every 8-14 s, at most two at once', () => {
-    const state = makeRace([{ id: 'a', x: px(-300) }, { id: 'b', x: px(300) }], { seed: 'spawn' });
+  it.each([1, 2, 3, 4, 5])('appear at the pace of frequency level %i, at most two at once', (level) => {
+    const timing = POWERUP_TIMINGS[level]!;
+    const state = createGameState({ code: 'TEST', seed: 'spawn' });
+    addPlayer(state, 'a', 'a');
+    addPlayer(state, 'b', 'b');
+    state.hostId = 'a';
+    expect(setPowerupFreq(state, 'a', level)).toBe(true);
+    startMatch(state, 'a');
+    Object.assign(state.players.a!, { x: px(-300), y: 0 });
+    Object.assign(state.players.b!, { x: px(300), y: 0 });
+    state.roundTick = COUNTDOWN_TICKS;
     const spawns: number[] = [];
     for (let t = 1; t <= 60 * TICK_RATE; t++) {
       for (const e of runTick(state, [])) if (e.type === 'powerupSpawn') spawns.push(t);
       expect(livePowerups(state).length).toBeLessThanOrEqual(2);
       if (state.phase !== 'playing') break;
     }
-    expect(spawns[0]).toBe(POWERUP_FIRST_TICKS);
+    expect(spawns[0]).toBe(timing.first);
     for (let i = 1; i < spawns.length; i++) {
-      expect(spawns[i]! - spawns[i - 1]!).toBeGreaterThanOrEqual(POWERUP_MIN_GAP_TICKS);
+      expect(spawns[i]! - spawns[i - 1]!).toBeGreaterThanOrEqual(timing.minGap);
       // A spawn delayed by a busy spot or two full slots waits a little longer.
-      expect(spawns[i]! - spawns[i - 1]!).toBeLessThanOrEqual(POWERUP_MAX_GAP_TICKS + POWERUP_LIFETIME_TICKS);
+      expect(spawns[i]! - spawns[i - 1]!).toBeLessThanOrEqual(timing.maxGap + POWERUP_LIFETIME_TICKS);
     }
     expect(spawns.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('come more often at a higher frequency level', () => {
+    for (let level = POWERUP_FREQ_MIN + 1; level <= POWERUP_FREQ_MAX; level++) {
+      const [slower, faster] = [POWERUP_TIMINGS[level - 1]!, POWERUP_TIMINGS[level]!];
+      expect(faster.first).toBeLessThanOrEqual(slower.first);
+      expect(faster.minGap + faster.maxGap).toBeLessThan(slower.minGap + slower.maxGap);
+    }
+  });
+
+  it('frequency: 1..5, set only by the host in the lobby, default 3', () => {
+    const state = createGameState({ code: 'X', seed: 1 });
+    addPlayer(state, 'h', 'Host');
+    addPlayer(state, 'g', 'Guest');
+    state.hostId = 'h';
+    expect(state.puFreq).toBe(DEFAULT_POWERUP_FREQ);
+    expect(DEFAULT_POWERUP_FREQ).toBe(3);
+    expect(setPowerupFreq(state, 'g', 5)).toBe(false);
+    for (const bad of [0, 6, 2.5, NaN, -1]) expect(setPowerupFreq(state, 'h', bad)).toBe(false);
+    expect(state.puFreq).toBe(3);
+    expect(setPowerupFreq(state, 'h', 5)).toBe(true);
+    expect(state.puFreq).toBe(5);
+    startMatch(state, 'h');
+    expect(setPowerupFreq(state, 'h', 1)).toBe(false);
+    expect(state.puFreq).toBe(5);
   });
 
   it('only appear inside the current ring, away from its edge and from the cars', () => {

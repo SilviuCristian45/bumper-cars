@@ -86,6 +86,8 @@ export interface GameState {
   joinCounter: number;
   /** Lobby option (host): power-ups on the ring. Off, the simulation is exactly the one without them. */
   powerups: boolean;
+  /** Lobby option (host): how often power-ups appear, POWERUP_FREQ_MIN..MAX (POWERUP_TIMINGS). */
+  puFreq: number;
   /** Fighting ticks until the next power-up tries to appear. */
   puTimer: number;
   // The power-ups lying on the ring: two flat slots (kind PU_NONE = empty), see powerups.ts.

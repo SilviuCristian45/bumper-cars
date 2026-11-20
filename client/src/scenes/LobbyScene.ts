@@ -8,6 +8,8 @@ import {
   POINTS_KNOCKOUT,
   POINTS_ROUND_WIN,
   POINTS_SELF_OUT,
+  POWERUP_FREQ_MAX,
+  POWERUP_FREQ_MIN,
   ROUND_OPTIONS,
   sortedPlayers,
   type GameState,
@@ -54,6 +56,9 @@ export class LobbyScene extends Phaser.Scene {
   private levelButtons: HTMLButtonElement[] = [];
   /** Power-ups "Da" / "Nu". */
   private powerupButtons: HTMLButtonElement[] = [];
+  /** How often power-ups appear (1..5), host only. */
+  private freqSlider!: HTMLInputElement;
+  private freqText!: HTMLElement;
   private addBotButton!: HTMLButtonElement;
   private removeBotButton!: HTMLButtonElement;
   private startButton!: HTMLButtonElement;
@@ -138,7 +143,7 @@ export class LobbyScene extends Phaser.Scene {
     const rules = [
       `Ultimul rămas pe ring +${POINTS_ROUND_WIN} · scoți pe cineva din ring +${POINTS_KNOCKOUT} · ieși singur ${POINTS_SELF_OUT}`,
       'Punctul de scos e al celui care l-a lovit ultimul (în 3 secunde).',
-      'Power-up-uri: treci peste ele ca să le iei (claxon, mici, colac, ulei, țuică, arcuri).',
+      'Power-up-uri: treci peste ele ca să le iei (claxon, mici, colac, ulei, țuică, arcuri, suc, proteină, fantomă).',
     ];
     return el('div', { class: 'lobby-players' }, [this.countText, list, el('p', { class: 'rules', text: rules.join('\n') })]);
   }
@@ -159,6 +164,12 @@ export class LobbyScene extends Phaser.Scene {
       b.classList.add('round-btn');
       return b;
     });
+    this.freqSlider = el('input', {
+      class: 'freq-slider',
+      attrs: { type: 'range', min: String(POWERUP_FREQ_MIN), max: String(POWERUP_FREQ_MAX), step: '1', 'aria-label': 'Cât de des apar power-up-urile' },
+    });
+    this.freqSlider.addEventListener('input', () => this.transport.send({ type: 'powerupFreq', level: Number(this.freqSlider.value) }));
+    this.freqText = el('div', { class: 'freq-text' });
     this.addBotButton = button('+Bot', () => this.transport.send({ type: 'addBot' }));
     this.removeBotButton = button('-Bot', () => this.transport.send({ type: 'removeBot' }));
     this.startButton = button('Start', () => this.transport.send({ type: 'start' }), 'primary', 'medium');
@@ -169,6 +180,7 @@ export class LobbyScene extends Phaser.Scene {
       el('div', { class: 'btn-row' }, this.roundButtons),
       el('div', { class: 'label', text: 'Power-up-uri' }),
       el('div', { class: 'btn-row' }, this.powerupButtons),
+      el('div', { class: 'freq' }, [this.freqSlider, this.freqText]),
       el('div', { class: 'label', text: 'Nivel boți' }),
       el('div', { class: 'btn-row' }, this.levelButtons),
       el('div', { class: 'btn-row' }, [this.addBotButton, this.removeBotButton]),
@@ -223,6 +235,10 @@ export class LobbyScene extends Phaser.Scene {
       setButtonStyle(b, state.powerups === on ? 'primary' : 'secondary');
       b.disabled = !isHost && state.powerups !== on;
     });
+    // The host's own drag wins while it is in flight; everyone else follows the state.
+    if (!(isHost && document.activeElement === this.freqSlider)) this.freqSlider.value = String(state.puFreq);
+    this.freqSlider.disabled = !isHost || !state.powerups;
+    setText(this.freqText, state.powerups ? `Cât de des: ${FREQ_LABELS[state.puFreq] ?? state.puFreq} (${state.puFreq}/${POWERUP_FREQ_MAX})` : 'Fără power-up-uri');
     BOT_LEVELS.forEach((level, i) => {
       const b = this.levelButtons[i]!;
       setButtonStyle(b, state.botLevel === level ? 'primary' : 'secondary');
@@ -280,6 +296,9 @@ export class LobbyScene extends Phaser.Scene {
     this.scene.start('menu', {});
   }
 }
+
+/** The power-up frequency levels as the lobby names them. */
+const FREQ_LABELS: Record<number, string> = { 1: 'rar', 2: 'din când în când', 3: 'des', 4: 'foarte des', 5: 'haos' };
 
 const avatars = new Map<number, string>();
 

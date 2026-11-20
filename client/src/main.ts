@@ -20,7 +20,7 @@ import { NameScene } from './scenes/NameScene';
 import { initChrome } from './ui/chrome';
 import { trackVisualViewport } from './ui/dom';
 import { initRotatePrompt } from './ui/orientation';
-import { debug, params, quickPowerups, quickStart as quick } from './urlOptions';
+import { debug, params, quickPowerupFreq, quickPowerups, quickStart as quick } from './urlOptions';
 
 // Test URL options skip the intro and menu and start a local match at once:
 // ?debug, ?bots=1..5 (default 3), ?rounds=3|5|7, ?seed=abc, ?botlevel=usor|mediu|greu,
@@ -40,6 +40,7 @@ function quickStart(): GameSceneData {
       botLevel: parseBotLevel(params.get('botlevel')),
       rounds: ROUND_OPTIONS.includes(rounds) ? rounds : DEFAULT_ROUNDS,
       powerups: quickPowerups,
+      powerupFreq: quickPowerupFreq,
       seed: params.get('seed') ?? Math.random().toString(36).slice(2),
       autoStart: true,
     }),

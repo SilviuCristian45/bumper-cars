@@ -26,7 +26,7 @@ Nivelurile boților: `usor`, `mediu`, `greu` (2–6 boți). `--seed` schimbă me
 ## Cum se joacă
 
 Intro → porecla → meniu: „Creează joc”, „Intră la un prieten” (cod de 6 caractere) sau „Joacă offline cu boți”.
-În lobby hostul alege 3/5/7 runde, power-up-uri da/nu și boții (până la 6 mașinuțe, fiecare bot cu nivelul lui), apoi Start.
+În lobby hostul alege 3/5/7 runde, power-up-uri da/nu și cât de des apar (1 rar … 5 haos), boții (până la 6 mașinuțe, fiecare bot cu nivelul lui), apoi Start.
 La final: podiumul (primii trei urcă pe trepte, artificii pentru câștigător), clasamentul meciului și premiile:
 Bătăușul (cei mai mulți scoși din ring), Kamikaze (cele mai multe ieșiri singur), Neclintitul (cele mai puține
 ieșiri), Ciocănarul (cele mai multe lovituri), Colecționarul (cele mai multe power-up-uri), Uriașul (cei mai
@@ -45,8 +45,17 @@ meciului apare „Ai intrat în top!” sau „Record nou!”.
 
 ## Power-up-uri
 
-Apar pe ring la ~10 s după START, apoi la fiecare 8–14 s, cel mult două odată, într-un loc liber, departe de
-margine și de mașini. Le iei trecând peste ele și se activează pe loc; dacă nu le ia nimeni, dispar după 10 s
+Cât de des apar alege hostul din lobby, de la 1 la 5 (implicit 3), cel mult două odată, într-un loc liber,
+departe de margine și de mașini:
+
+| Nivel | Primul după START | Apoi la fiecare |
+|---|---|---|
+| 1 rar | 12 s | 12–18 s |
+| 2 din când în când | 10 s | 8–14 s |
+| 3 des (implicit) | 7 s | 5–9 s |
+| 4 foarte des | 5 s | 3–6 s |
+| 5 haos | 3 s | 2–4 s |
+ Le iei trecând peste ele și se activează pe loc; dacă nu le ia nimeni, dispar după 10 s
 (clipesc înainte) sau când ringul care se strânge trece peste ele. O mașină are un singur efect de durată
 odată: unul nou îl înlocuiește pe cel vechi (Claxonul și Uleiul sunt instantanee).
 
@@ -99,7 +108,7 @@ Butonul de sunet le oprește pe toate, muzica inclusiv.
 
 `?bots=1..5`, `?rounds=3|5|7`, `?seed=abc`, `?botlevel=usor|mediu|greu`, `?debug` (hitbox-uri, vectori, ce fac boții, power-up-uri și când apare următorul),
 `?touch` / `?touch=0` (forțează controalele de telefon), `?tune` (panou cu reglaje pentru condus și power-up-uri, cu
-„Copiază valorile”) și `?powerups=0` (meci local fără power-up-uri).
+„Copiază valorile”), `?powerups=0` (meci local fără power-up-uri) și `?pufreq=1..5` (cât de des apar).
 Toate în afară de `?touch` sar peste meniuri direct într-un meci local. Reglajele salvate din `?tune` se aplică doar
 cu `?tune` în URL și niciodată într-un joc online.
 

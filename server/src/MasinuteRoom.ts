@@ -27,6 +27,7 @@ import {
   setBotLevel,
   setConnected,
   setDefaultBotLevel,
+  setPowerupFreq,
   setPowerups,
   setRounds,
   skipBotRound,
@@ -142,6 +143,9 @@ export class MasinuteRoom extends Room<{ state: RoomState }> {
     });
     this.onMessage('powerups', (client, msg: { on?: unknown }) => {
       if (typeof msg?.on === 'boolean') setPowerups(this.game, client.sessionId, msg.on);
+    });
+    this.onMessage('powerupFreq', (client, msg: { level?: unknown }) => {
+      if (typeof msg?.level === 'number') setPowerupFreq(this.game, client.sessionId, msg.level);
     });
     this.onMessage('setBotLevel', (client, msg: { botId?: unknown; level?: unknown }) => {
       if (typeof msg?.botId === 'string' && typeof msg.level === 'number') {

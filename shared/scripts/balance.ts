@@ -1,6 +1,6 @@
 // Bots-only tournament over many seeds: round wins, points and timings per bot level, and how
 // each power-up kind plays out (pickups, how often its picker wins the round, its knockouts).
-//   npm run balance -w shared -- --matches 40 --lineup usor,usor,mediu,mediu,greu,greu [--powerups off] [--set proteinMassPct=250,sodaGripPct=85]
+//   npm run balance -w shared -- --matches 40 --lineup usor,usor,mediu,mediu,greu,greu [--powerups off] [--pufreq 1..5] [--set proteinMassPct=250,sodaGripPct=85]
 import { parseArgs } from 'node:util';
 import {
   BOT_EASY,
@@ -34,6 +34,7 @@ const { values } = parseArgs({
     matches: { type: 'string', default: '40' },
     lineup: { type: 'string', default: 'usor,usor,mediu,mediu,greu,greu' },
     powerups: { type: 'string', default: 'on' }, // on | off
+    pufreq: { type: 'string', default: '3' }, // how often power-ups appear, 1..5
     set: { type: 'string', default: '' }, // TUNING overrides: key=value,key=value
   },
 });
@@ -86,6 +87,7 @@ for (let m = 0; m < Number(values.matches); m++) {
   state.hostId = 'b0';
   setRounds(state, 'b0', 5);
   state.powerups = values.powerups !== 'off';
+  state.puFreq = Number(values.pufreq);
   startMatch(state, 'b0');
   let sawOut = false;
   /** Who picked up each kind this round. */

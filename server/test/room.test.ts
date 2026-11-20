@@ -217,6 +217,24 @@ describe('MasinuteRoom', () => {
     expect(game(room).powerups).toBe(false);
   });
 
+  it('lets only the host set how often power-ups appear, 1..5, only in the lobby', async () => {
+    const { client, room } = await create();
+    const guest = await join(client.roomId);
+    expect(game(room).puFreq).toBe(3);
+    await send(guest, room, 'powerupFreq', { level: 5 });
+    expect(game(room).puFreq).toBe(3);
+    await send(client, room, 'powerupFreq', { level: 9 });
+    await send(client, room, 'powerupFreq', { level: '5' });
+    expect(game(room).puFreq).toBe(3);
+    await send(client, room, 'powerupFreq', { level: 5 });
+    expect(game(room).puFreq).toBe(5);
+    await room.waitForNextPatch();
+    expect(room.state.puFreq).toBe(5);
+    await send(client, room, 'start');
+    await send(client, room, 'powerupFreq', { level: 1 });
+    expect(game(room).puFreq).toBe(5);
+  });
+
   it('lets only the host set bot levels, only in the lobby, only to valid values', async () => {
     const { client, room } = await create();
     const guest = await join(client.roomId);

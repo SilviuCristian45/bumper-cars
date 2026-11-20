@@ -20,6 +20,7 @@ export const GAME_STATE_KEYS = [
   'rng',
   'joinCounter',
   'powerups',
+  'puFreq',
   'puTimer',
   'pu0Kind',
   'pu0X',
