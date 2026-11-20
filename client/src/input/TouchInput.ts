@@ -1,5 +1,6 @@
 import { ANGLE_STEPS, INPUT_MAX, angleDiff, clamp } from '@masinute/shared';
-import { el } from '../ui/dom';
+import { el } from '../ui/el';
+import './touch.css';
 import type { DriveContext, DriveInput, InputSource } from './InputSource';
 
 export interface TouchOptions {

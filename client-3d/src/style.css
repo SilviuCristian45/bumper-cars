@@ -1,0 +1,214 @@
+/* 3D probe: page, HUD, ?perf overlay. The touch controls' styles come with TouchInput (client/src/input/touch.css). */
+
+:root {
+  --text: #fff4d6;
+  --muted: #a99cc8;
+  --yellow: #ffd166;
+  --cyan: #4cc9f0;
+  --font: 'Trebuchet MS', 'Segoe UI', Verdana, sans-serif;
+  --sat: env(safe-area-inset-top, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #120a24;
+  color: var(--text);
+  font-family: var(--font);
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  position: fixed;
+  inset: 0;
+}
+
+#stage,
+#stage canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  touch-action: none;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.7);
+}
+
+.hud-scores {
+  position: absolute;
+  top: calc(var(--sat) + 10px);
+  left: calc(var(--sal) + 10px);
+  background: rgba(18, 10, 36, 0.6);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 15px;
+  min-width: 150px;
+}
+
+.hud-scores .row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 1.5;
+}
+
+.hud-scores .row.out {
+  opacity: 0.4;
+}
+
+.hud-scores .row.me .name {
+  color: var(--yellow);
+  font-weight: bold;
+}
+
+.hud-scores .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.hud-scores .name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 130px;
+}
+
+.hud-scores .pts {
+  font-weight: bold;
+  min-width: 2ch;
+  text-align: right;
+}
+
+.hud-top {
+  position: absolute;
+  top: calc(var(--sat) + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+}
+
+.hud-round {
+  font-size: 20px;
+  font-weight: bold;
+  color: var(--yellow);
+}
+
+.hud-effect {
+  font-size: 15px;
+  font-weight: bold;
+  margin-top: 2px;
+}
+
+.hud-center {
+  position: absolute;
+  top: 34%;
+  left: 0;
+  right: 0;
+  text-align: center;
+}
+
+.hud-banner {
+  font-size: clamp(32px, 9vh, 84px);
+  font-weight: bold;
+  color: var(--yellow);
+}
+
+.hud-sub {
+  font-size: 17px;
+  margin-top: 6px;
+}
+
+.hud-boost {
+  position: absolute;
+  bottom: calc(var(--sab) + 16px);
+  left: 50%;
+  width: 200px;
+  height: 18px;
+  margin-left: -100px;
+  border: 2px solid rgba(76, 201, 240, 0.6);
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(18, 10, 36, 0.6);
+  font-size: 12px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hud-boost .fill {
+  position: absolute;
+  inset: 0;
+  background: rgba(76, 201, 240, 0.45);
+  transform-origin: left;
+}
+
+.hud-boost.ready {
+  border-color: #9fe7ff;
+  box-shadow: 0 0 12px rgba(76, 201, 240, 0.6);
+}
+
+.hud-boost span {
+  position: relative;
+}
+
+#cam-btn {
+  position: fixed;
+  z-index: 15;
+  top: calc(var(--sat) + 10px);
+  right: calc(var(--sar) + 10px);
+  font: bold 14px var(--font);
+  color: var(--text);
+  background: rgba(36, 20, 70, 0.75);
+  border: 2px solid rgba(234, 242, 255, 0.35);
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.perf {
+  position: fixed;
+  z-index: 30;
+  right: calc(var(--sar) + 10px);
+  top: calc(var(--sat) + 54px);
+  white-space: pre;
+  font: 12px/1.35 Consolas, Menlo, monospace;
+  color: #b6ffb0;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 6px 8px;
+  border-radius: 6px;
+  pointer-events: none;
+}
+
+/* Phones: the scores stay clear of the joystick (bottom left); smaller text. */
+body.touch .hud-scores {
+  font-size: 13px;
+  min-width: 120px;
+}
+
+body.touch .hud-center {
+  top: 26%;
+}

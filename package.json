@@ -6,6 +6,7 @@
   "workspaces": [
     "shared",
     "client",
+    "client-3d",
     "server"
   ],
   "scripts": {
@@ -18,7 +19,10 @@
     "test:hidden-tab": "node client/scripts/hidden-tab.mjs",
     "sim": "npm run sim -w shared --",
     "og": "npm run og -w client",
-    "typecheck": "npm run typecheck -w shared && npm run typecheck -w client && npm run typecheck -w server"
+    "typecheck": "npm run typecheck -w shared && npm run typecheck -w client && npm run typecheck -w client-3d && npm run typecheck -w server",
+    "dev:3d": "npm run dev -w client-3d",
+    "build:3d": "npm run build -w client-3d",
+    "preview:3d": "npm run preview -w client-3d"
   },
   "devDependencies": {
     "concurrently": "^10.0.7",
