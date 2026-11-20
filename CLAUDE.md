@@ -18,7 +18,7 @@ npm run typecheck    # tsc for shared + client + client-3d + server
 npm run build        # client/dist (static) + server/dist/index.js (single esbuild bundle)
 npm run sim -- --bots usor,mediu,greu,greu --rounds 5 --seed abc -v   # headless bots-only match, prints rounds + standings (--powerups off)
 npm run balance -w shared -- --matches 40 --lineup usor,usor,mediu,mediu,greu,greu   # bot tournament stats per level (--powerups off)
-npm run test:hidden-tab -- --mode tab|sametab|freeze|offline|reload --when start|round|intermission|podium --away 15   # two Chrome clients, B away and back; within 1 s (2.5 s for --mode reload) (needs npm run dev, or --base http://localhost:<preview port>/); exit 1 on failure
+npm run test:hidden-tab -- --mode tab|sametab|freeze|offline|reload --when start|round|intermission|podium --away 15   # two Chrome clients, B away and back; within 1 s (2 s for --mode offline, 2.5 s for --mode reload) (needs npm run dev, or --base http://localhost:<preview port>/); exit 1 on failure
 npm run og           # redraws client/public/og.png (link preview) + favicons from client/assets-src/icons.mjs (resvg)
 ```
 
