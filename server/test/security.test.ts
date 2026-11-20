@@ -8,13 +8,14 @@ import {
   ERR_TOO_MANY_ROOMS,
   ROOM_NAME,
 } from '@masinute/shared';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createServer } from '../src/app';
 import { forwardedClientIp, ipKey } from '../src/clientIp';
-import { MAX_ROOMS_PER_IP, MAX_WS_PER_IP, RATES } from '../src/config';
+import { LEADERBOARD_MATCHES_PER_IP_PER_DAY, MAX_ROOMS_PER_IP, MAX_WS_PER_IP, RATES } from '../src/config';
 import { isAllowedOrigin, type Guard } from '../src/guard';
+import { migrate, MIGRATIONS, openLeaderboard, useLeaderboard, type Leaderboard } from '../src/leaderboard';
 import { Counts, DailyQuota, RateLimiter } from '../src/limits';
-import type { MasinuteRoom } from '../src/MasinuteRoom';
+import { savedMatchesToday, type MasinuteRoom } from '../src/MasinuteRoom';
 
 // Each attack from SECURITY-AUDIT.md against a real server on 2569: what used to get through, and
 // that it is refused now. "Through Caddy" = from loopback with X-Forwarded-For, as Caddy sends it.
@@ -287,6 +288,72 @@ describe('D2 + m1: room codes cannot be guessed or predicted', () => {
     const codes = new Set<string>();
     for (let i = 0; i < 4; i++) codes.add((await createRoom({})).body!.roomId!);
     expect(codes.size).toBe(4);
+  });
+});
+
+describe('D1: one address cannot flood the leaderboard', () => {
+  let board: Leaderboard;
+  beforeEach(() => {
+    board = openLeaderboard(':memory:')!;
+    useLeaderboard(board);
+  });
+  afterEach(() => {
+    useLeaderboard(null);
+    board.close();
+  });
+  const matches = () => (board['db'].prepare('SELECT COUNT(*) AS n FROM matches').get() as { n: number }).n;
+  const saved = () => board['db'].prepare('SELECT name FROM results ORDER BY id').all().map((r) => (r as { name: string }).name);
+
+  /** A room with two humans (two tabs of one person, or two friends), each seen from the given address. */
+  async function twoTabs(ipA: string, ipB: string, names = ['Ana', 'Ion']): Promise<MasinuteRoom> {
+    const a = await colyseus.sdk.create(ROOM_NAME, { name: names[0] });
+    const b = await colyseus.sdk.joinById(a.roomId, { name: names[1] });
+    const room = colyseus.getRoomById<MasinuteRoom>(a.roomId);
+    room['clientIps'].set(a.sessionId, ipA);
+    room['clientIps'].set(b.sessionId, ipB);
+    return room;
+  }
+
+  it(`saves at most ${LEADERBOARD_MATCHES_PER_IP_PER_DAY} matches a day from one address (it used to save every one)`, async () => {
+    const ip = freshIp();
+    const room = await twoTabs(ip, ip);
+    for (let i = 0; i < LEADERBOARD_MATCHES_PER_IP_PER_DAY + 3; i++) room['saveMatch']();
+    expect(matches()).toBe(LEADERBOARD_MATCHES_PER_IP_PER_DAY);
+    expect(savedMatchesToday.has(ip)).toBe(false);
+  });
+
+  it('still saves the players from other addresses in that match', async () => {
+    const spent = freshIp();
+    for (let i = 0; i < LEADERBOARD_MATCHES_PER_IP_PER_DAY; i++) savedMatchesToday.use(spent);
+    const room = await twoTabs(spent, freshIp());
+    room['saveMatch']();
+    expect(saved()).toEqual(['Ion']);
+  });
+
+  it('friends behind one Wi-Fi count as one address, with room for an evening of matches', async () => {
+    const wifi = freshIp();
+    const room = await twoTabs(wifi, wifi);
+    for (let i = 0; i < 10; i++) room['saveMatch']();
+    expect(matches()).toBe(10);
+  });
+
+  it('files "Ştefan" (cedilla) and "ștefan" under one leaderboard row', async () => {
+    const room = await twoTabs(freshIp(), freshIp(), ['Ştefan', 'Ion']);
+    room['saveMatch']();
+    const other = await twoTabs(freshIp(), freshIp(), ['ștefan', 'Ana']);
+    other['saveMatch']();
+    expect(board.top().filter((e) => e.name.toLowerCase().includes('tefan'))).toHaveLength(1);
+    expect(board.top().find((e) => e.name.toLowerCase().includes('tefan'))?.matches).toBe(2);
+  });
+
+  it('merges old cedilla rows into the comma-below player when the database migrates', () => {
+    const db = new (process.getBuiltinModule('node:sqlite') as typeof import('node:sqlite')).DatabaseSync(':memory:');
+    migrate(db, MIGRATIONS.slice(0, 1));
+    db.exec(`INSERT INTO matches (id, room, ended_at, rounds, humans, bots) VALUES (1, 'ABCDEF', '2026-01-01T00:00:00Z', 3, 2, 0);
+             INSERT INTO results (match_id, name, name_key, points, wins, knockouts, self_outs, place) VALUES (1, 'Ştefan', 'ştefan', 5, 1, 0, 0, 1);`);
+    migrate(db);
+    expect(db.prepare('SELECT name, name_key FROM results').get()).toEqual({ name: 'Ștefan', name_key: 'ștefan' });
+    db.close();
   });
 });
 

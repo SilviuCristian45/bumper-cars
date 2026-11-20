@@ -56,10 +56,44 @@ export function sortedPlayers(state: GameState): PlayerState[] {
   return Object.values(state.players).sort((a, b) => a.slot - b.slot);
 }
 
-/** Trimmed, at most MAX_NAME_LENGTH characters, without control or invisible formatting characters. */
+/** Letters that draw nothing (Hangul fillers, braille blank, Khmer inherent vowels, grapheme joiner). */
+const BLANK_LETTERS = /[\u115F\u1160\u3164\uFFA0\u2800\u17B4\u17B5\u034F]/gu;
+/** Romanian is written with comma-below ș/ț; old keyboards type the cedilla look-alikes. */
+const COMMA_BELOW: Record<string, string> = { ş: 'ș', Ş: 'Ș', ţ: 'ț', Ţ: 'Ț' };
+
+/**
+ * A nickname as everyone sees it: NFC, Romanian ș/ț, no control/format/private/unassigned characters
+ * or letters that draw nothing, plain single spaces, at most two combining marks in a row (no zalgo),
+ * at most MAX_NAME_LENGTH characters. Without a letter, digit or emoji left it becomes 'Jucător'.
+ * Idempotent. The raw input is cut first, so a huge one costs nothing.
+ */
 export function sanitizeName(name: string): string {
-  const clean = [...name.replace(/[\p{Cc}\p{Cf}]/gu, '').trim()].slice(0, MAX_NAME_LENGTH).join('').trim();
-  return clean || 'Jucător';
+  const text = name
+    .slice(0, 16 * MAX_NAME_LENGTH)
+    .normalize('NFC')
+    .replace(/[şŞţŢ]/g, (c) => COMMA_BELOW[c]!)
+    .replace(/[\p{C}\p{Zl}\p{Zp}]/gu, '')
+    .replace(BLANK_LETTERS, '')
+    .replace(/\p{Zs}+/gu, ' ')
+    .replace(/(\p{M}\p{M})\p{M}+/gu, '$1');
+  const clean = [...text.trim()].slice(0, MAX_NAME_LENGTH).join('').trim();
+  return /[\p{L}\p{N}\p{Extended_Pictographic}]/u.test(clean) ? clean : 'Jucător';
+}
+
+/** One leaderboard row per key: the sanitized nickname, lowercased ("Ştefan" and "ștefan" are the same player). */
+export function nameKey(name: string): string {
+  return sanitizeName(name).toLowerCase();
+}
+
+/** The name itself if no other player in the room has it (in any case), otherwise with the first free number: "Ana 2". */
+function uniqueName(state: GameState, name: string): string {
+  const taken = new Set(Object.values(state.players).map((p) => p.name.toLowerCase()));
+  if (!taken.has(name.toLowerCase())) return name;
+  for (let n = 2; ; n++) {
+    const suffix = ` ${n}`;
+    const candidate = [...name].slice(0, MAX_NAME_LENGTH - suffix.length).join('').trim() + suffix;
+    if (!taken.has(candidate.toLowerCase())) return candidate;
+  }
 }
 
 export type JoinResult = { ok: true; player: PlayerState } | { ok: false; reason: 'in-progress' | 'full' | 'duplicate' };
@@ -74,7 +108,7 @@ export function addPlayer(state: GameState, id: string, name: string, isBot = fa
   while (used.has(slot)) slot++;
   const player: PlayerState = {
     id,
-    name: sanitizeName(name),
+    name: uniqueName(state, sanitizeName(name)),
     slot,
     joinOrder: state.joinCounter++,
     isBot,

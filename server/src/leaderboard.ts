@@ -5,6 +5,7 @@ import {
   computeStandings,
   LEADERBOARD_MIN_HUMANS,
   LEADERBOARD_SIZE,
+  nameKey,
   type GameState,
   type LeaderboardEntry,
   type NewRecord,
@@ -43,6 +44,10 @@ export const MIGRATIONS: readonly string[] = [
      place INTEGER NOT NULL -- place in the match standings, bots included
    );
    CREATE INDEX results_name_key ON results(name_key);`,
+  // Nicknames are now written with comma-below ș/ț (sanitizeName): old cedilla rows join the same player.
+  `UPDATE results SET
+     name = replace(replace(replace(replace(name, 'ş', 'ș'), 'Ş', 'Ș'), 'ţ', 'ț'), 'Ţ', 'Ț'),
+     name_key = replace(replace(name_key, 'ş', 'ș'), 'ţ', 'ț');`,
 ];
 
 export interface PlayerResult {
@@ -86,10 +91,6 @@ export function matchResult(state: Readonly<GameState>, endedAt: Date): MatchRes
     }));
   if (players.length === 0) return null;
   return { room: state.code, endedAt, rounds: state.roundsTotal, humans: humans.length, bots: all.length - humans.length, players };
-}
-
-export function nameKey(name: string): string {
-  return name.trim().toLowerCase();
 }
 
 /** Brings the schema up to date, one transaction per step. Throws on a schema newer than this code. */

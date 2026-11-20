@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { LEADERBOARD_MIN_HUMANS, LEADERBOARD_SIZE, sanitizeName, type LeaderboardEntry } from '@masinute/shared';
+import { LEADERBOARD_MIN_HUMANS, LEADERBOARD_SIZE, nameKey, type LeaderboardEntry } from '@masinute/shared';
 import { fetchLeaderboard, formatRecordDate } from '../net/leaderboard';
 import { ensureTextures } from '../render/textures';
 import { load } from '../storage';
@@ -51,7 +51,7 @@ export class LeaderboardScene extends Phaser.Scene {
   }
 
   private table(entries: LeaderboardEntry[]): HTMLElement {
-    const me = sanitizeName(load('name') ?? '').toLowerCase();
+    const me = nameKey(load('name') ?? '');
     const head = el(
       'tr',
       {},
@@ -67,7 +67,7 @@ export class LeaderboardScene extends Phaser.Scene {
     );
     const rows = entries.map((e) => {
       const medal = MEDALS[e.place - 1];
-      const classes = [medal, e.name.toLowerCase() === me ? 'me' : ''].filter(Boolean).join(' ');
+      const classes = [medal, nameKey(e.name) === me ? 'me' : ''].filter(Boolean).join(' ');
       return el('tr', { class: classes }, [
         el('td', { class: 'place', text: String(e.place) }),
         el('td', { class: 'name', text: e.name }),

@@ -37,8 +37,9 @@ import {
   type TickEvents,
 } from '@masinute/shared';
 import { IP_HEADER } from './clientIp';
-import { LOBBY_IDLE_MINUTES, MAX_MESSAGES_PER_SECOND, MAX_ROOMS, MAX_ROOMS_PER_IP, RECONNECT_SECONDS } from './config';
+import { LEADERBOARD_MATCHES_PER_IP_PER_DAY, LOBBY_IDLE_MINUTES, MAX_MESSAGES_PER_SECOND, MAX_ROOMS, MAX_ROOMS_PER_IP, RECONNECT_SECONDS } from './config';
 import { currentLeaderboard, matchResult } from './leaderboard';
+import { DailyQuota } from './limits';
 import { mirror } from './mirror';
 import { isCodeTaken, registerRoom, roomCount, roomsOwnedBy, unregisterRoom } from './registry';
 import { RoomState } from './schema';
@@ -51,6 +52,9 @@ interface JoinOptions {
 
 /** Join/create option onAuth overwrites with the requester's limit key. */
 const CLIENT_IP = 'clientIp';
+
+/** Leaderboard matches saved per address today, across all rooms. */
+export const savedMatchesToday = new DailyQuota(LEADERBOARD_MATCHES_PER_IP_PER_DAY);
 
 /** The limit key onAuth put in the options. */
 function clientIpOf(options: JoinOptions | undefined): string {
@@ -72,6 +76,8 @@ export class MasinuteRoom extends Room<{ state: RoomState }> {
   /** Closes the room if it sits in the lobby this long without a Start; a field so tests can shorten it. */
   lobbyIdleMs = LOBBY_IDLE_MINUTES * 60_000;
   private lobbyTimer: Delayed | undefined;
+  /** Each player's limit key ('' outside Caddy), for the leaderboard quota. */
+  private readonly clientIps = new Map<string, string>();
 
   /**
    * Runs for every create/join request, before the room exists for a create. Only stamps the options
@@ -177,6 +183,7 @@ export class MasinuteRoom extends Room<{ state: RoomState }> {
       if (result.reason === 'in-progress') throw new ServerError(ERR_IN_PROGRESS, 'Meciul e în desfășurare');
       throw new ServerError(ERR_ROOM_FULL, 'Jocul e plin');
     }
+    this.clientIps.set(client.sessionId, clientIpOf(options));
     mirror(this.game, this.state);
   }
 
@@ -226,10 +233,20 @@ export class MasinuteRoom extends Room<{ state: RoomState }> {
   /** Writes the finished match to the all-time leaderboard. A database error is only logged. */
   private saveMatch(): void {
     const board = currentLeaderboard();
-    const result = matchResult(this.game, new Date());
+    const now = new Date();
+    const result = matchResult(this.game, now);
     if (!board || !result) return;
+    // One address saves at most LEADERBOARD_MATCHES_PER_IP_PER_DAY matches a day (one person with
+    // several tabs); players from an address past it are left out of this save, the others still count.
+    const ipOf = (playerId: string) => this.clientIps.get(playerId) ?? '';
+    const players = result.players.filter((p) => !ipOf(p.playerId) || savedMatchesToday.has(ipOf(p.playerId), now));
+    if (players.length < result.players.length) {
+      console.warn(`Clasament: ${result.players.length - players.length} jucător(i) din ${this.roomId} lăsați afară (limita zilnică de meciuri per adresă).`);
+    }
+    if (players.length === 0) return;
     try {
-      const records = board.record(result);
+      const records = board.record({ ...result, players });
+      for (const ip of new Set(players.map((p) => ipOf(p.playerId)).filter(Boolean))) savedMatchesToday.use(ip, now);
       if (records.length > 0) this.broadcast(MSG_RECORDS, { records } satisfies MatchRecords);
     } catch (err) {
       console.error(`Clasament: meciul din ${this.roomId} nu s-a putut salva:`, err);
