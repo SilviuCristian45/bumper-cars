@@ -42,6 +42,12 @@ export interface Pong {
 export const ERR_SERVER_FULL = 4001; // too many rooms on the server
 export const ERR_ROOM_FULL = 4002;
 export const ERR_IN_PROGRESS = 4003;
+export const ERR_RATE_LIMITED = 4004; // too many requests from one address (HTTP 429)
+export const ERR_TOO_MANY_ROOMS = 4005; // too many rooms open from one address
+export const ERR_FORBIDDEN_ORIGIN = 4006; // a page on another site (HTTP 403)
+
+/** WebSocket close code of a lobby closed because nobody started it in time. */
+export const CLOSE_LOBBY_IDLE = 4100;
 
 /** Answer of GET /rooms/:code, used to explain a refused join. */
 export type RoomStatus = 'open' | 'full' | 'playing' | 'missing';

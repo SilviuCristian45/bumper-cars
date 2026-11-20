@@ -1,5 +1,15 @@
 import { Client, type Room } from '@colyseus/sdk';
-import { DEFAULT_ROUNDS, ERR_IN_PROGRESS, ERR_ROOM_FULL, ERR_SERVER_FULL, ROOM_NAME, type RoomStatus } from '@masinute/shared';
+import {
+  DEFAULT_ROUNDS,
+  ERR_FORBIDDEN_ORIGIN,
+  ERR_IN_PROGRESS,
+  ERR_RATE_LIMITED,
+  ERR_ROOM_FULL,
+  ERR_SERVER_FULL,
+  ERR_TOO_MANY_ROOMS,
+  ROOM_NAME,
+  type RoomStatus,
+} from '@masinute/shared';
 import { netSim } from '../urlOptions';
 import { ColyseusTransport } from './ColyseusTransport';
 import type { GameTransport } from './GameTransport';
@@ -145,6 +155,11 @@ async function explain(err: unknown, code?: string): Promise<RoomError> {
   if (errorCode === ERR_SERVER_FULL) return new RoomError('Serverul e plin. Încearcă puțin mai târziu sau joacă offline cu boți.', true);
   if (errorCode === ERR_ROOM_FULL) return new RoomError('Jocul e plin (maxim 6 mașinuțe).');
   if (errorCode === ERR_IN_PROGRESS) return new RoomError('Meciul e deja în desfășurare. Încearcă după ce se termină.');
+  if (errorCode === ERR_RATE_LIMITED) return new RoomError('Prea multe încercări de pe rețeaua ta. Mai așteaptă un minut și încearcă din nou.');
+  if (errorCode === ERR_TOO_MANY_ROOMS) {
+    return new RoomError('Sunt deja prea multe jocuri deschise de pe rețeaua ta. Intră în unul dintre ele sau mai încearcă peste câteva minute.');
+  }
+  if (errorCode === ERR_FORBIDDEN_ORIGIN) return new RoomError('Jocul online merge doar de pe pagina jocului.', true);
   if (code && /not found|disposed|locked/.test(message)) {
     // Colyseus reports a full room and a running match the same way ("locked"); ask the server which.
     const status = await fetchStatus(code);

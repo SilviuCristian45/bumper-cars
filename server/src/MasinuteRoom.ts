@@ -1,12 +1,14 @@
-import { Room, ServerError, type Client } from '@colyseus/core';
+import { Room, ServerError, type AuthContext, type Client, type Delayed } from '@colyseus/core';
 import {
   addBot,
   addPlayer,
   backToLobby,
+  CLOSE_LOBBY_IDLE,
   createGameState,
   ERR_IN_PROGRESS,
   ERR_ROOM_FULL,
   ERR_SERVER_FULL,
+  ERR_TOO_MANY_ROOMS,
   generateRoomCode,
   InputQueue,
   leavePlayer,
@@ -32,14 +34,26 @@ import {
   type RoomStatus,
   type TickEvents,
 } from '@masinute/shared';
-import { MAX_MESSAGES_PER_SECOND, MAX_ROOMS, RECONNECT_SECONDS } from './config';
+import { IP_HEADER } from './clientIp';
+import { LOBBY_IDLE_MINUTES, MAX_MESSAGES_PER_SECOND, MAX_ROOMS, MAX_ROOMS_PER_IP, RECONNECT_SECONDS } from './config';
 import { currentLeaderboard, matchResult } from './leaderboard';
 import { mirror } from './mirror';
-import { isCodeTaken, registerRoom, roomCount, unregisterRoom } from './registry';
+import { isCodeTaken, registerRoom, roomCount, roomsOwnedBy, unregisterRoom } from './registry';
 import { RoomState } from './schema';
 
 interface JoinOptions {
   name?: unknown;
+  /** Set by onAuth from the guard's IP_HEADER (never what the client sent): the limit key, '' outside Caddy. */
+  [CLIENT_IP]?: unknown;
+}
+
+/** Join/create option onAuth overwrites with the requester's limit key. */
+const CLIENT_IP = 'clientIp';
+
+/** The limit key onAuth put in the options. */
+function clientIpOf(options: JoinOptions | undefined): string {
+  const ip = options?.[CLIENT_IP];
+  return typeof ip === 'string' ? ip : '';
 }
 
 /**
@@ -53,13 +67,28 @@ export class MasinuteRoom extends Room<{ state: RoomState }> {
   /** Events produced outside a tick (leaving players, skipped rounds), sent with the next one. */
   private pendingEvents: GameEvent[] = [];
   private botCounter = 0;
+  /** Closes the room if it sits in the lobby this long without a Start; a field so tests can shorten it. */
+  lobbyIdleMs = LOBBY_IDLE_MINUTES * 60_000;
+  private lobbyTimer: Delayed | undefined;
 
-  onCreate(): void {
+  /**
+   * Runs for every create/join request, before the room exists for a create. Only stamps the options
+   * with the requester's limit key (onCreate counts rooms per key); anything but a plain object is refused.
+   */
+  static async onAuth(_token: string, options: unknown, context: AuthContext): Promise<boolean> {
+    if (typeof options !== 'object' || options === null || Array.isArray(options)) return false;
+    (options as JoinOptions)[CLIENT_IP] = context.headers.get(IP_HEADER) ?? '';
+    return true;
+  }
+
+  onCreate(options?: JoinOptions): void {
     if (roomCount() >= MAX_ROOMS) throw new ServerError(ERR_SERVER_FULL, 'Serverul e plin');
+    const ownerIp = clientIpOf(options);
+    if (ownerIp && roomsOwnedBy(ownerIp) >= MAX_ROOMS_PER_IP) throw new ServerError(ERR_TOO_MANY_ROOMS, 'Prea multe jocuri de la aceeași adresă');
     // Room codes double as Colyseus room ids, so players join with joinById(code).
     const code = generateRoomCode(Math.random, isCodeTaken);
     this.roomId = code;
-    registerRoom(code, this);
+    registerRoom(code, this, ownerIp);
 
     this.maxClients = MAX_PLAYERS;
     this.autoDispose = true;
@@ -100,10 +129,14 @@ export class MasinuteRoom extends Room<{ state: RoomState }> {
       }
     });
     this.onMessage('start', async (client) => {
-      if (startMatch(this.game, client.sessionId)) await this.lock();
+      if (!startMatch(this.game, client.sessionId)) return;
+      this.lobbyTimer?.clear();
+      await this.lock();
     });
     this.onMessage('lobby', async (client) => {
-      if (backToLobby(this.game, client.sessionId)) await this.unlock();
+      if (!backToLobby(this.game, client.sessionId)) return;
+      this.armLobbyTimer();
+      await this.unlock();
     });
     // Online a round may be fast-forwarded only by the host, and only once every human is out.
     this.onMessage('skipRound', (client) => {
@@ -120,6 +153,16 @@ export class MasinuteRoom extends Room<{ state: RoomState }> {
     // setFixedTimestep: without a simulation loop, Colyseus would start a second timer that
     // advances the room clock on its own, and the fixed-step loop would barely ever step.
     this.patchRate = null;
+    this.armLobbyTimer();
+  }
+
+  /** (Re)starts the countdown after which a lobby nobody started is closed. */
+  armLobbyTimer(): void {
+    this.lobbyTimer?.clear();
+    this.lobbyTimer = this.clock.setTimeout(() => {
+      // Everyone goes back to the menu with a message (CLOSE_LOBBY_IDLE); the room disposes itself.
+      if (this.game.phase === 'lobby') void this.disconnect(CLOSE_LOBBY_IDLE);
+    }, this.lobbyIdleMs);
   }
 
   onJoin(client: Client, options?: JoinOptions): void {

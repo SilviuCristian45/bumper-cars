@@ -40,7 +40,7 @@ beforeAll(async () => {
   // boot() would listen on its default port (2568) whatever port it is given for a Server instance.
   const server = createServer();
   await server.listen(TEST_PORT, '127.0.0.1');
-  colyseus = new ColyseusTestServer(server);
+  colyseus = new ColyseusTestServer(server.colyseus);
 });
 afterAll(async () => {
   await colyseus.shutdown();

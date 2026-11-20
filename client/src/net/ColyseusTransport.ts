@@ -2,6 +2,7 @@ import type { Room } from '@colyseus/sdk';
 import {
   angleDiff,
   CAR_RADIUS,
+  CLOSE_LOBBY_IDLE,
   FP,
   MSG_EVENTS,
   MSG_PONG,
@@ -61,6 +62,7 @@ const MAX_EVENT_WAIT_MS = 500;
 /** Effects of events this old are past (the tab was in the background): they are dropped, not replayed at once. */
 const STALE_EVENT_MS = 2000;
 const LOST_MESSAGE = 'Conexiunea cu serverul s-a pierdut.';
+const IDLE_LOBBY_MESSAGE = 'Jocul a fost închis: a stat prea mult în lobby fără să pornească meciul.';
 /** Retries back off 0.2 s, 0.4 s ... up to 5 s: about 20 s in all, past the server's 15 s window. */
 const RECONNECT_RETRIES = 8;
 
@@ -145,10 +147,12 @@ export class ColyseusTransport implements GameTransport {
       onToken(room.reconnectionToken);
     });
     // The token is kept here on purpose: a tab reload also closes the socket and must be able to resume.
-    room.onLeave(() => {
+    room.onLeave((code) => {
       if (this.disposed) return;
       this.status = 'closed';
-      this.closeReason = LOST_MESSAGE;
+      this.closeReason = code === CLOSE_LOBBY_IDLE ? IDLE_LOBBY_MESSAGE : LOST_MESSAGE;
+      // A room the server closed on purpose cannot be resumed by a reload.
+      if (code === CLOSE_LOBBY_IDLE) onToken(null);
     });
     // Failed attempts while reconnecting also land here; the banner already tells that story.
     room.onError((code, message) => {
