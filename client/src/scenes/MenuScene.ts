@@ -2,12 +2,13 @@ import Phaser from 'phaser';
 import { MAX_PLAYERS, sanitizeName } from '@masinute/shared';
 import { isTouch } from '../device';
 import type { GameTransport } from '../net/GameTransport';
-import { createOfflineRoom, createRoom, joinRoom, onlineEnabled, RoomError } from '../net/rooms';
+import { abandonResumableRoom, createOfflineRoom, createRoom, joinRoom, onlineEnabled, resumeRoom, RoomError } from '../net/rooms';
 import { ensureTextures } from '../render/textures';
 import { getSetting, setSetting } from '../settings';
 import { load } from '../storage';
 import { drawBackdrop } from '../ui/backdrop';
 import { CodeInput } from '../ui/CodeInput';
+import { openDialog } from '../ui/dialog';
 import { button, el, mountScreen, setButtonStyle, title } from '../ui/dom';
 import { installHint } from '../ui/installHint';
 import { openSettings } from '../ui/settingsDialog';
@@ -19,6 +20,10 @@ export interface MenuSceneData {
   invite?: string;
   /** Shown on arrival, e.g. an invalid invite link or a lost connection. */
   message?: string;
+  /** The tab was reloaded during an online game: reconnect to that room right away. */
+  resume?: boolean;
+  /** Opened a link to another room while in this one ('' = code unknown): ask before switching. */
+  switchFrom?: string;
 }
 
 /** Two obvious choices: create a game, or join a friend's by code. Offline play with bots is the third. */
@@ -57,7 +62,9 @@ export class MenuScene extends Phaser.Scene {
       installHint(),
     ]);
 
-    if (this.opts.invite) this.joinInvite(this.opts.invite);
+    if (this.opts.switchFrom !== undefined && this.opts.invite) this.askSwitch(this.opts.switchFrom, this.opts.invite);
+    else if (this.opts.resume) this.resume();
+    else if (this.opts.invite) this.joinInvite(this.opts.invite);
     else if (!isTouch && onlineEnabled) this.codeInput.focus();
   }
 
@@ -75,6 +82,40 @@ export class MenuScene extends Phaser.Scene {
     );
     toggle.classList.add('corner-toggle');
     return toggle;
+  }
+
+  private resume(): void {
+    void this.connect(resumeRoom(), 'Se reconectează la joc...');
+  }
+
+  /** A link to another room while this tab still has a game: the link wins, once confirmed. */
+  private askSwitch(current: string, invite: string): void {
+    const from = current ? ` (${current})` : '';
+    const stay = () => {
+      dialog.close();
+      // Whatever happens, a later reload should not ask again.
+      forgetInviteInUrl();
+      this.resume();
+    };
+    const dialog = openDialog(
+      [
+        el('h2', { text: `Ieși din jocul curent${from}
+și intri în ${invite}?` }),
+        el('div', { class: 'btn-row' }, [
+          button(
+            `Da, intru în ${invite}`,
+            () => {
+              dialog.close();
+              this.setStatus('Ieși din jocul curent...', true);
+              void abandonResumableRoom().then(() => this.joinInvite(invite));
+            },
+            'primary',
+          ),
+          button('Nu, rămân', stay),
+        ]),
+      ],
+      stay,
+    );
   }
 
   /** "Joci ca {nume} · schimbă" */
@@ -136,9 +177,7 @@ export class MenuScene extends Phaser.Scene {
   private joinInvite(code: string): void {
     this.codeInput.setCode(code);
     // Whatever happens, a later reload of this page should not retry the invite.
-    const url = new URL(window.location.href);
-    url.searchParams.delete('room');
-    window.history.replaceState(null, '', url);
+    forgetInviteInUrl();
     this.join(code);
   }
 
@@ -169,4 +208,10 @@ export class MenuScene extends Phaser.Scene {
     this.offlineButton.disabled = busy;
     this.codeInput.setDisabled(busy);
   }
+}
+
+function forgetInviteInUrl(): void {
+  const url = new URL(window.location.href);
+  url.searchParams.delete('room');
+  window.history.replaceState(null, '', url);
 }

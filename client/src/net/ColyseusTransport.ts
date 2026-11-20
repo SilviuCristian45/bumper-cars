@@ -101,6 +101,8 @@ export class ColyseusTransport implements GameTransport {
   constructor(
     private readonly room: Room,
     private readonly net: NetSimOptions,
+    /** Keeps the reconnection token for a reload of the tab (null: forget it). */
+    private readonly onToken: (token: string | null) => void = () => undefined,
   ) {
     this.playerId = room.sessionId;
     this.predictor = new Predictor(this.playerId);
@@ -113,6 +115,7 @@ export class ColyseusTransport implements GameTransport {
     // The SDK skips auto-reconnection for rooms joined less than 5 s ago; a drop right after Start must still recover.
     room.reconnection.minUptime = 0;
     room.reconnection.maxRetries = RECONNECT_RETRIES;
+    onToken(room.reconnectionToken);
 
     // Patches are rebuilt at once: with simulated lag the SDK's live state would be ahead of the delay.
     room.onStateChange(() => this.receive({ kind: 'state', state: rebuildState(room.state as unknown as RemoteState) }));
@@ -128,7 +131,9 @@ export class ColyseusTransport implements GameTransport {
         return;
       }
       this.status = 'connected';
+      onToken(room.reconnectionToken);
     });
+    // The token is kept here on purpose: a tab reload also closes the socket and must be able to resume.
     room.onLeave(() => {
       if (this.disposed) return;
       this.status = 'closed';
@@ -216,6 +221,7 @@ export class ColyseusTransport implements GameTransport {
     this.disposed = true;
     this.listeners.clear();
     document.removeEventListener('visibilitychange', this.onVisibility);
+    this.onToken(null);
     void this.room.leave().catch(() => undefined);
   }
 

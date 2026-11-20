@@ -28,8 +28,10 @@ Intro → porecla → meniu: „Creează joc”, „Intră la un prieten” (cod
 După meci, hostul îi duce pe toți înapoi în lobby.
 
 Online: „Creează joc” dă un cod de 6 caractere și un link de invitație (`?room=COD`, „Trimite invitația” pe telefon,
-„Copiază link” pe calculator). Cine pierde conexiunea are 15 secunde să revină. Dacă serverul nu răspunde,
-meniul spune asta și propune jocul offline cu boți.
+„Copiază link” pe calculator). Cine pierde conexiunea are 15 secunde să revină; reîncărcarea paginii în acest
+timp te readuce în același joc, cu aceeași mașinuță (dacă deschizi între timp linkul altui joc, ești întrebat
+întâi dacă vrei să-l părăsești pe cel curent). Dacă serverul nu răspunde, meniul spune asta și propune jocul
+offline cu boți.
 
 ## Opțiuni de test în URL
 
@@ -41,6 +43,11 @@ cu `?tune` în URL și niciodată într-un joc online.
 Pentru jocul online: `?lag=120&jitter=30` simulează o rețea lentă (120 ms în plus dus-întors, până la 30 ms aleator
 pe fiecare mesaj), iar `?online` păstrează meniurile ca `?debug` să arate și ping-ul, eroarea de predicție,
 inputurile neconfirmate și corecțiile mari pe secundă (de exemplu `?online&debug&lag=120&jitter=30`).
+
+## Publicare
+
+Pe VPS, la https://masinute-balci.duckdns.org: `.\deploy\push.ps1` (teste, build, upload, health check, rollback
+automat). Prima instalare și toți pașii: [`deploy/README.md`](deploy/README.md).
 
 Tehnologii: Phaser 3, TypeScript, Vite, Colyseus. Simularea (în `shared/`) e deterministă și rulează
 la fel în browser și pe server.

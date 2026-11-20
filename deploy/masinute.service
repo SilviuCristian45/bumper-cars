@@ -1,0 +1,38 @@
+# systemd unit for the Mașinuțe de Bâlci game server, installed by deploy/setup.sh.
+# /opt/masinute/current is a symlink to the active release (switched atomically by deploy/push.ps1).
+[Unit]
+Description=Mașinuțe de Bâlci (Colyseus)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=masinute
+Group=masinute
+WorkingDirectory=/opt/masinute/current/server
+ExecStart=/usr/bin/node /opt/masinute/current/server/index.js
+Environment=NODE_ENV=production
+Environment=HOST=127.0.0.1
+Environment=PORT=2568
+Environment=MAX_ROOMS=20
+Restart=always
+RestartSec=3
+
+# Shared 1 GB VPS: keep the game in its own small box.
+MemoryMax=250M
+Environment="NODE_OPTIONS=--max-old-space-size=170 --enable-source-maps"
+
+# Hardening (as bombe.service): the process only reads its bundle and listens on loopback.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

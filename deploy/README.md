@@ -1,0 +1,114 @@
+# Deploy pe VPS-ul Oracle
+
+Jocul rulează la **https://masinute-balci.duckdns.org**, pe VPS-ul Oracle (Ubuntu, 1 GB RAM, user `ubuntu`,
+alias SSH `oracle`), lângă jocul cu trenul și Bombe și Petarde. Scripturile ating doar ce ține de mașinuțe:
+
+| Ce | Unde |
+|---|---|
+| user de sistem | `masinute` |
+| versiunile | `/opt/masinute/releases/<data-ora>/` (`server/index.js` + `.map`, `client/`, `VERSION`) |
+| versiunea activă / anterioară | symlink-urile `/opt/masinute/current` și `/opt/masinute/current.prev` |
+| clientul servit de Caddy | `/var/www/masinute` → `/opt/masinute/current/client` |
+| serviciul | `masinute.service` (Node pe `127.0.0.1:2568`, `MemoryMax=250M`, heap `--max-old-space-size=170`, `Restart=always`) |
+| Caddy | blocul `masinute-balci.duckdns.org` din `/etc/caddy/Caddyfile` |
+
+**Nu se ating**: `bombe` (port 2567, `/opt/bombe`, `/var/www/bombe`, `bombe-petarde.duckdns.org`),
+`cabina-api` (`/var/www/cabina`, `tren-api.duckdns.org`). Caddy primește doar `reload`, niciodată restart.
+Nu e nevoie de Docker, Redis sau module native: serverul e un singur fișier `index.js` (bundle esbuild).
+
+Fișiere:
+
+- `setup.sh`: instalarea inițială, pe VPS (o singură dată; poate fi rulat din nou fără efecte nedorite);
+- `push.ps1`: actualizare de pe Windows (teste, typecheck, build, upload, comutare atomică, health check, rollback);
+- `remote-update.sh`: partea de pe server a lui `push.ps1` (o urcă și o rulează el);
+- `masinute.service`, `Caddyfile`: unit-ul systemd și blocul Caddy, instalate de `setup.sh`.
+
+## Înainte de prima instalare
+
+1. **DuckDNS**: creează subdomeniul `masinute-balci` și pune-l pe IP-ul public al VPS-ului.
+   Verifică din PowerShell: `Resolve-DnsName masinute-balci.duckdns.org` (trebuie să dea IP-ul VPS-ului).
+2. **Porturile** 80 și 443 sunt deja deschise (le folosesc celelalte site-uri). Portul 2568 **nu** se deschide:
+   serverul ascultă doar pe loopback, Caddy e singura intrare.
+3. **SSH**: `ssh oracle "echo ok"` merge din PowerShell fără parolă (alias în `~/.ssh/config`).
+4. **Local**: `npm install`, apoi `.\deploy\push.ps1 -WhatIf` trece (teste, typecheck, build, arhivă;
+   serverul nu e atins).
+
+## Prima instalare
+
+Din PowerShell, în rădăcina repo-ului:
+
+```powershell
+# 1. copiază folderul deploy/ pe server
+ssh oracle "rm -rf /tmp/masinute-deploy"
+scp -r deploy oracle:/tmp/masinute-deploy
+
+# 2. instalarea (user, directoare, systemd, Caddy)
+ssh -t oracle "sudo bash /tmp/masinute-deploy/setup.sh"
+
+# 3. prima versiune: build, upload, pornește serviciul, health check
+.\deploy\push.ps1
+
+# 4. verificare
+ssh oracle "systemctl status masinute --no-pager; cat /opt/masinute/current/VERSION"
+Invoke-WebRequest https://masinute-balci.duckdns.org/colyseus/health -UseBasicParsing | Select-Object -Expand Content
+```
+
+`setup.sh`:
+
+1. afișează memoria liberă și swap-ul (`free -h`, `swapon --show`); avertizează dacă nu există swap sau
+   dacă sunt sub 300 MB disponibili (nu se oprește, nu creează swap);
+2. verifică Node ≥ 22.12 în `/usr/bin/node`; dacă lipsește sau e mai vechi, îl instalează din NodeSource
+   (pe acest VPS e deja instalat pentru bombe, deci de obicei nu face nimic);
+3. verifică că portul 2568 e liber (sau deja al lui `masinute`);
+4. creează user-ul `masinute`, `/opt/masinute/releases` și symlink-ul `/var/www/masinute`;
+5. instalează și activează `masinute.service` (îl repornește doar dacă unit-ul s-a schimbat; înainte de
+   primul `push.ps1` nu pornește, pentru că nu există încă nicio versiune);
+6. dacă `/etc/caddy/Caddyfile` nu conține încă `masinute-balci.duckdns.org`: validează configurația existentă,
+   face un backup cu dată și oră (`Caddyfile.bak-AAAALLZZ-HHMMSS`), adaugă blocul, validează din nou
+   (dacă pică, restaurează backup-ul și se oprește fără reload), apoi `systemctl reload caddy`.
+   Dacă blocul există deja, nu modifică nimic.
+
+Primul health check public poate dura câteva secunde, cât Caddy ia certificatul HTTPS (`push.ps1` încearcă
+de 10 ori). Dacă tot pică la primul deploy, nu există o versiune anterioară la care să revină: verifică DNS-ul
+și `ssh oracle "journalctl -u caddy -n 50 --no-pager"`.
+
+## Actualizări
+
+```powershell
+.\deploy\push.ps1            # deploy
+.\deploy\push.ps1 -WhatIf    # testele, build-ul și arhiva local + comenzile care s-ar rula; serverul nu e atins
+.\deploy\push.ps1 -Rollback  # revine la versiunea anterioară, fără build
+```
+
+Parametri: `-Server` (implicit `oracle`), `-User`, `-Key`, `-WhatIf`, `-Rollback`; fără alias:
+`.\deploy\push.ps1 -Server 203.0.113.10 -Key C:\cale\cheie` (user implicit `ubuntu`).
+`ssh` rulează cu `-n` (stdin închis; `scp` primește un stdin gol) și ambele cu `-o BatchMode=yes` (fără prompt
+ascuns de parolă) plus timeout-uri de conexiune.
+
+Ce face un deploy:
+
+1. avertizează dacă ai modificări necomise (nu se oprește);
+2. rulează local `npm test`, `npm run typecheck`, `npm run build` și se oprește la prima eroare;
+3. pune `server/dist/index.js` (+ `.map`) și `client/dist/` (plus `VERSION`: commit și oră) într-un `release.tar.gz`;
+4. îl copiază cu `scp`, împreună cu `remote-update.sh` (fără CRLF), în `/tmp/masinute-push`;
+5. pe server: despachetează într-o versiune nouă, mută `current.prev` pe versiunea activă și comută
+   `current` pe cea nouă printr-o singură redenumire de symlink (serverul și clientul se schimbă împreună),
+   apoi repornește `masinute` și așteaptă `http://127.0.0.1:2568/health`;
+6. de pe Windows verifică `https://masinute-balci.duckdns.org/colyseus/health`.
+
+Dacă oricare health check pică, revine automat la versiunea anterioară: versiunea nouă e ștearsă și
+`current.prev` rămâne cum era. Pe server se păstrează versiunea activă, cea anterioară și încă trei.
+
+Un restart pierde room-urile în curs (jucătorii văd „Conexiunea cu serverul s-a pierdut”), deci actualizează
+când nu se joacă nimeni. După o modificare a lui `masinute.service`, copiază din nou `deploy/` și rulează
+`setup.sh` (`push.ps1` nu instalează unit-uri).
+
+## Util
+
+```powershell
+ssh oracle "journalctl -u masinute -n 50 --no-pager"       # loguri
+ssh oracle "cat /opt/masinute/current/VERSION"             # ce versiune rulează
+ssh oracle "curl -s http://127.0.0.1:2568/health"          # camere active / maxim
+ssh oracle "systemctl show masinute -p MemoryCurrent"      # memoria folosită (limita: 250M)
+ssh oracle "free -h; swapon --show"
+```

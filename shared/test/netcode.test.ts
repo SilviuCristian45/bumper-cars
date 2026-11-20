@@ -111,6 +111,23 @@ describe('Predictor', () => {
     expect(predictor.state!.tick).toBe(server.tick + 2);
   });
 
+  it('numbers on from the server when it takes over a seat (a reloaded tab)', () => {
+    const server = makeRace([{ id: 'me' }, { id: 'b', x: px(200) }]);
+    server.players.me!.lastSeq = 500;
+    const predictor = new Predictor('me');
+    predictor.reconcile(server);
+    const sent = predictor.advance({ steer: 0, throttle: 100, boost: false });
+    expect(sent.seq).toBe(501);
+    const queue = new InputQueue();
+    queue.remove('me'); // what the server does on a reconnection
+    queue.push('me', sent);
+    runTick(server, queue.take());
+    expect(server.players.me!.lastSeq).toBe(501);
+    predictor.reconcile(server);
+    expect(predictor.unconfirmed).toBe(0);
+    expect(predictor.state).toEqual(server);
+  });
+
   it('forgets everything outside a round', () => {
     const state = createGameState({ code: 'ABCDEF', seed: 1 });
     addPlayer(state, 'me', 'Eu');

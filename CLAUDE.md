@@ -13,7 +13,7 @@ Run from the repo root:
 ```bash
 npm install
 npm run dev          # client (http://localhost:5174) + server (:2568) together; dev:client / dev:server for one
-npm test             # vitest for /shared, then the server room tests
+npm test             # vitest for /shared, the client's DOM-free modules (client/test), then the server room tests
 npm run typecheck    # tsc for shared + client + server
 npm run build        # client/dist (static) + server/dist/index.js (single esbuild bundle)
 npm run sim -- --bots usor,mediu,greu,greu --rounds 5 --seed abc -v   # headless bots-only match, prints rounds + standings
@@ -30,7 +30,7 @@ npm run test:watch -w shared
 
 Server room tests boot a real server on port 2569 (not 2568, which is the dev/prod port, and not Bombe's ports).
 
-Normal visits go intro → name → menu → lobby → game → back to the lobby. Test URL options (all but `?touch` skip the menus and start a local match at once): `?debug` (hitboxes, heading/velocity vectors, hit credit, each bot's intent/target/input, tick/FPS, own speed/boost/slide/seq), `?bots=1..5` (default 3), `?rounds=3|5|7`, `?seed=abc`, `?botlevel=usor|mediu|greu`, `?touch` / `?touch=0` (force the phone layout and touch controls, otherwise `(hover: none) and (pointer: coarse)`, see `client/src/device.ts`), `?tune` (driving-feel sliders, see below). Online testing keeps the menus: `?online`, `?lag=ms&jitter=ms` (simulated network: `lag` = added round trip split over both directions, `jitter` = up to that much extra per message, order kept; `client/src/net/LagLine.ts`) and `?room=` all do, so `?online&debug&lag=120&jitter=30` plays online with the debug overlay (which then adds ping, the own car's prediction error being smoothed, unconfirmed inputs, big corrections per second). URL options are parsed in `client/src/urlOptions.ts`. In-game: `P` (or the touch "Pauză" button) pauses (local only), `Esc` (or "Ieși") opens the leave confirmation, `F` toggles fullscreen; after the match `Enter` (or a tap on the final panel) starts a new match in test mode, otherwise the host goes back to the lobby. `?room=CODE` (invite link) is joined from the menu after the name.
+Normal visits go intro → name → menu → lobby → game → back to the lobby. Test URL options (all but `?touch` skip the menus and start a local match at once): `?debug` (hitboxes, heading/velocity vectors, hit credit, each bot's intent/target/input, tick/FPS, own speed/boost/slide/seq), `?bots=1..5` (default 3), `?rounds=3|5|7`, `?seed=abc`, `?botlevel=usor|mediu|greu`, `?touch` / `?touch=0` (force the phone layout and touch controls, otherwise `(hover: none) and (pointer: coarse)`, see `client/src/device.ts`), `?tune` (driving-feel sliders, see below). Online testing keeps the menus: `?online`, `?lag=ms&jitter=ms` (simulated network: `lag` = added round trip split over both directions, `jitter` = up to that much extra per message, order kept; `client/src/net/LagLine.ts`) and `?room=` all do, so `?online&debug&lag=120&jitter=30` plays online with the debug overlay (which then adds ping, the own car's prediction error being smoothed, unconfirmed inputs, big corrections per second). URL options are parsed in `client/src/urlOptions.ts`. In-game: `P` (or the touch "Pauză" button) pauses (local only), `Esc` (or "Ieși") opens the leave confirmation, `F` toggles fullscreen; after the match `Enter` (or a tap on the final panel) starts a new match in test mode, otherwise the host goes back to the lobby. `?room=CODE` (invite link) is joined from the menu after the name. **Resume after reload**: the online transport keeps `{ token, code }` (Colyseus reconnection token + room code) in sessionStorage (`client/src/net/resume.ts`, key `masinute.reconnect`; cleared by a consented leave, taken before every attempt so a failed one is not retried); on load `main.ts` → `startupRoute` skips the intro and the menu calls `resumeRoom()` (server keeps the seat 15 s); a `?room=` link to another room asks first ("Ieși din jocul curent...?": yes → `abandonResumableRoom()` reconnects and leaves for good, then joins; no → resumes). A resumed page's `Predictor` numbers inputs on from the server's `lastSeq` and the server forgets the player's input queue on reconnect (otherwise the new page's low seqs would be ignored as old).
 
 ## Architecture
 
@@ -71,7 +71,8 @@ Normal visits go intro → name → menu → lobby → game → back to the lobb
 - Tests (`server/test/room.test.ts`) listen on 2569 themselves: `@colyseus/testing`'s `boot()` ignores the port for a `Server` instance and would take 2568. On Windows the 33 ms interval fires every ~47 ms, so the fixed-step loop sometimes runs two ticks per wakeup: tests must not assume one tick per `waitForNextTimestep()`.
 
 ### `/deploy` — Oracle VPS (Ubuntu, 1 GB RAM, SSH alias `oracle`), https://masinute-balci.duckdns.org
-- Caddy on 443 proxies `/colyseus/*` to `127.0.0.1:2568`; systemd unit `masinute` with `MemoryMax=250M`; releases under `/opt/masinute/releases` with atomic `current` symlink, rollback, health check; `ssh -n` + `BatchMode`. No Docker, Redis or native deps.
+- Modeled on Bombe's `deploy/`. Caddy on 443 proxies `/colyseus/*` to `127.0.0.1:2568` (`handle_path`), serves `/var/www/masinute` → `/opt/masinute/current/client`; systemd unit `masinute` (user `masinute`, `MemoryMax=250M`, `--max-old-space-size=170`, same hardening as `bombe.service`); releases under `/opt/masinute/releases` with atomic `current`/`current.prev` symlinks, rollback, health check with automatic rollback; `ssh -n` + `BatchMode`. No Docker, Redis or native deps.
+- `setup.sh` (run once on the VPS with sudo, idempotent: shows free memory/swap, Node ≥ 22.12, port check, user/dirs, unit, appends the Caddy block only if the domain is missing, validates before and after, `reload` only), `push.ps1` (`npm test`/typecheck/build → tar → scp → `remote-update.sh deploy|rollback`; `-WhatIf`, `-Rollback`), `README.md` (exact first-install steps).
 - The VPS also runs the train game (`cabina-api`, `tren-api.duckdns.org`) and Bombe și Petarde (`bombe`, port 2567, `bombe-petarde.duckdns.org`): never touch them. **Never run anything on the VPS unless the user explicitly says so**; only prepare and dry-run (`push.ps1 -WhatIf`).
 
 ## Game rules
@@ -87,7 +88,7 @@ Normal visits go intro → name → menu → lobby → game → back to the lobb
 2. Rendering + LocalTransport + keyboard/touch controls — done.
 3. Menus and lobby (from Bombe și Petarde) — done.
 4. Colyseus server + ColyseusTransport with prediction/reconciliation; simulated lag test (100–150 ms), incl. convergence after a collision — done.
-5. Deploy scripts (do not run on the VPS until told).
+5. Deploy scripts (do not run on the VPS until told) + resume after reload — done (verified only with `push.ps1 -WhatIf`).
 6. Podium, atmosphere, tuning.
 
 Stop after each stage so the user can test.

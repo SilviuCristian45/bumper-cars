@@ -357,6 +357,54 @@ describe('MasinuteRoom', () => {
     expect(game(room).players[guest.sessionId]!.connected).toBe(true);
   });
 
+  it('resumes a reloaded tab mid-round: same car, its inputs numbered on from lastSeq', async () => {
+    const { client, room } = await create();
+    const guest = await join(client.roomId);
+    await send(client, room, 'addBot');
+    await send(client, room, 'start');
+    skipCountdown(room);
+    const id = guest.sessionId;
+    await send(guest, room, 'input', { seq: 40, steer: 0, throttle: 100, boost: false });
+    expect(game(room).players[id]!.lastSeq).toBe(40);
+
+    // The reload: the socket closes without a consented leave and the page reconnects with the saved token.
+    const token = guest.reconnectionToken;
+    guest.reconnection.enabled = false;
+    await guest.leave(false);
+    await room.waitForNextTimestep();
+    expect(game(room).players[id]).toMatchObject({ connected: false, alive: true });
+    expect(game(room).phase).toBe('playing');
+
+    const back = await colyseus.sdk.reconnect(token);
+    expect(back.sessionId).toBe(id);
+    await room.waitForNextPatch();
+    const seen = rebuildState(back.state as unknown as RemoteState);
+    expect(seen.phase).toBe('playing');
+    expect(seen.players[id]).toMatchObject({ connected: true, alive: true, lastSeq: 40 });
+
+    // The new page's predictor numbers on from the lastSeq it was given (Predictor test in shared).
+    await send(back, room, 'input', { seq: 41, steer: 100, throttle: 0, boost: false });
+    expect(game(room).players[id]).toMatchObject({ lastSeq: 41, steer: 100, throttle: 0 });
+  });
+
+  it('frees the seat of a reloaded tab that chose to join another room', async () => {
+    const { client, room } = await create();
+    const guest = await join(client.roomId);
+    const id = guest.sessionId;
+    const token = guest.reconnectionToken;
+    guest.reconnection.enabled = false;
+    await guest.leave(false);
+    await room.waitForNextTimestep();
+    expect(game(room).players[id]!.connected).toBe(false);
+
+    // abandonResumableRoom: reconnect only to leave for good, without waiting out the 15 s.
+    const back = await colyseus.sdk.reconnect(token);
+    await back.leave(true);
+    await room.waitForNextTimestep();
+    expect(game(room).players[id]).toBeUndefined();
+    expect(Object.keys(game(room).players)).toEqual([client.sessionId]);
+  });
+
   it(`refuses to create more than ${MAX_ROOMS} rooms`, async () => {
     for (let i = 0; i < MAX_ROOMS; i++) await create(`P${i}`);
     const err = await rejection(create());

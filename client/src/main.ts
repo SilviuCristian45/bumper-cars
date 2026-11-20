@@ -5,6 +5,8 @@ import { DEFAULT_ROUNDS, isValidRoomCode, MAX_PLAYERS, normalizeRoomCode, ROUND_
 import { parseBotLevel } from './botLevels';
 import { isTouch } from './device';
 import { LocalTransport } from './net/LocalTransport';
+import { startupRoute } from './net/resume';
+import { resumableRoomCode } from './net/rooms';
 import { GAME_H, GAME_W } from './render/layout';
 import { GameScene, type GameSceneData } from './scenes/GameScene';
 import { IntroScene } from './scenes/IntroScene';
@@ -50,6 +52,12 @@ function menuData(): MenuSceneData {
   return isValidRoomCode(code) ? { invite: code } : { message: 'Codul din link nu e valid.' };
 }
 
+// A reload during an online game skips the intro and reconnects to the same room; a link to
+// another room skips it too, and the menu asks whether to leave the current game for it.
+const startup = quick ? startupRoute(null, undefined) : startupRoute(resumableRoomCode(), menuData().invite);
+const resume = startup.kind !== 'normal';
+const resumeData: MenuSceneData = startup.kind === 'switch' ? { invite: startup.to, switchFrom: startup.from } : { resume: true };
+
 // Phones: no long-press menu (the CSS already stops selection and the callout); text fields keep theirs.
 if (isTouch) {
   document.body.classList.add('touch');
@@ -72,8 +80,8 @@ const game = new Phaser.Game({
 initChrome();
 initRotatePrompt();
 trackVisualViewport();
-game.scene.add('intro', IntroScene, !quick, menuData());
+game.scene.add('intro', IntroScene, !quick && !resume, menuData());
 game.scene.add('name', NameScene);
-game.scene.add('menu', MenuScene);
+game.scene.add('menu', MenuScene, resume, resumeData);
 game.scene.add('lobby', LobbyScene);
 game.scene.add('game', GameScene, quick, quick ? quickStart() : undefined);

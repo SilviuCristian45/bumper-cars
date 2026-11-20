@@ -133,6 +133,9 @@ export class MasinuteRoom extends Room<{ state: RoomState }> {
 
   onReconnect(client: Client): void {
     setConnected(this.game, client.sessionId, true);
+    // A reloaded tab numbers its inputs on from PlayerState.lastSeq, which may be below the last one
+    // received; whatever the old connection still had queued is stale anyway.
+    this.inputQueue.remove(client.sessionId);
   }
 
   /** Gone for good: a consented leave, or the reconnection window expired. */

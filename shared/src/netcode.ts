@@ -67,6 +67,7 @@ export class InputQueue {
     this.queues.clear();
   }
 
+  /** Forgets a player: gone for good, or back on a new connection (whose inputs number on from PlayerState.lastSeq). */
   remove(playerId: string): void {
     this.queues.delete(playerId);
     this.lastSeq.delete(playerId);
@@ -110,6 +111,9 @@ export class Predictor {
     this.predicted = cloneState(server);
     const me = server.players[this.playerId];
     this.driving = server.phase === 'playing' && !!me;
+    // A new client for a known player (the tab was reloaded and resumed the seat) numbers on from
+    // the last input the server applied: lower numbers would be ignored as old.
+    if (me && this.seq < me.lastSeq) this.seq = me.lastSeq;
     if (!this.driving || !me) {
       this.pending = [];
       return;
