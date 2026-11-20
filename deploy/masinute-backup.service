@@ -1,0 +1,21 @@
+# Daily copy of the leaderboard database, started by masinute-backup.timer (installed by deploy/setup.sh).
+[Unit]
+Description=Mașinuțe de Bâlci: backup clasament
+After=masinute.service
+
+[Service]
+Type=oneshot
+User=masinute
+Group=masinute
+# Same directory and mode as masinute.service.
+StateDirectory=masinute
+StateDirectoryMode=0750
+ExecStart=/usr/local/sbin/masinute-backup
+Nice=10
+IOSchedulingClass=idle
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+PrivateNetwork=true

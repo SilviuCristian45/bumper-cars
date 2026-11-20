@@ -14,6 +14,7 @@ import {
   TICK_MS,
   type GameEvent,
   type GameState,
+  type NewRecord,
   type PlayerInput,
 } from '@masinute/shared';
 import type { DriveInput } from '../input/InputSource';
@@ -97,6 +98,11 @@ export class LocalTransport implements GameTransport {
   view(): RenderView {
     this.blend.push(this.state);
     return this.blend.view(this.paused ? 1 : Math.min(1, this.acc / TICK_MS));
+  }
+
+  /** Offline matches never reach the all-time leaderboard. */
+  newRecords(): readonly NewRecord[] {
+    return [];
   }
 
   isPaused(): boolean {

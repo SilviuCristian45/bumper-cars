@@ -165,8 +165,8 @@ async function fetchStatus(code: string): Promise<RoomStatus | null> {
   }
 }
 
-/** An HTTP route of the game server (GET /rooms/:code), or null in an offline-only build. */
-function serverHttpUrl(path: string): URL | null {
+/** An HTTP route of the game server (GET /rooms/:code, /leaderboard), or null in an offline-only build. */
+export function serverHttpUrl(path: string): URL | null {
   if (!serverUrl) return null;
   const url = new URL(serverUrl);
   url.protocol = url.protocol === 'wss:' ? 'https:' : url.protocol === 'ws:' ? 'http:' : url.protocol;

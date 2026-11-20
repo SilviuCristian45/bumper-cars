@@ -333,7 +333,8 @@ export class GameScene extends Phaser.Scene {
           : state.hostId === this.transport.playerId
             ? `\n\n${tap} = înapoi în lobby`
             : '\n\nAșteaptă ca hostul să revină în lobby.';
-        text = `${result}\n\nGata meciul!\n${lines.join('\n')}${again}`;
+        const records = this.recordLines();
+        text = `${result}\n\nGata meciul!\n${lines.join('\n')}${records ? `\n\n${records}` : ''}${again}`;
       }
     } else if (this.transport.isPaused() && !this.confirm) {
       text = `Pauză\n\n${isTouch ? 'Revino în joc' : 'P = continuă'}`;
@@ -344,6 +345,23 @@ export class GameScene extends Phaser.Scene {
 
     const watching = state.phase === 'playing' && me && !me.alive && !text;
     this.banner.setText(watching ? 'Ai ieșit din ring! Privești runda.' : '');
+  }
+
+  /**
+   * Online: "Ai intrat în top! Locul X" / "Record nou! Locul X" for this player, then the others
+   * (shown once the server has saved the match). Offline: a note that it does not count.
+   */
+  private recordLines(): string {
+    if (!this.transport.online) return this.data_.newMatch ? '' : 'Meciurile offline nu intră în clasament.';
+    const me = this.transport.playerId;
+    return [...this.transport.newRecords()]
+      .sort((a, b) => Number(b.playerId === me) - Number(a.playerId === me) || a.place - b.place)
+      .map((r) =>
+        r.playerId === me
+          ? `${r.kind === 'top' ? 'Ai intrat în top!' : 'Record nou!'} Locul ${r.place} în clasament`
+          : `${r.name}: ${r.kind === 'top' ? 'a intrat în top' : 'record nou'}, locul ${r.place}`,
+      )
+      .join('\n');
   }
 
   private togglePause(): void {

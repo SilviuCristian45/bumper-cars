@@ -13,6 +13,7 @@ import {
   MAX_PLAYERS,
   MSG_EVENTS,
   MSG_PONG,
+  MSG_RECORDS,
   parseInput,
   removeBot,
   runTick,
@@ -25,11 +26,13 @@ import {
   TICK_RATE,
   type GameEvent,
   type GameState,
+  type MatchRecords,
   type Pong,
   type RoomStatus,
   type TickEvents,
 } from '@masinute/shared';
 import { MAX_MESSAGES_PER_SECOND, MAX_ROOMS, RECONNECT_SECONDS } from './config';
+import { currentLeaderboard, matchResult } from './leaderboard';
 import { mirror } from './mirror';
 import { isCodeTaken, registerRoom, roomCount, unregisterRoom } from './registry';
 import { RoomState } from './schema';
@@ -164,5 +167,20 @@ export class MasinuteRoom extends Room<{ state: RoomState }> {
     // The patch first: clients hold a tick's events until their state has reached it.
     this.broadcastPatch();
     if (events.length > 0) this.broadcast(MSG_EVENTS, { tick: this.game.tick, events } satisfies TickEvents);
+    // matchEnd happens once per match, from a tick or from a skipped round (sent with this tick).
+    if (events.some((e) => e.type === 'matchEnd')) this.saveMatch();
+  }
+
+  /** Writes the finished match to the all-time leaderboard. A database error is only logged. */
+  private saveMatch(): void {
+    const board = currentLeaderboard();
+    const result = matchResult(this.game, new Date());
+    if (!board || !result) return;
+    try {
+      const records = board.record(result);
+      if (records.length > 0) this.broadcast(MSG_RECORDS, { records } satisfies MatchRecords);
+    } catch (err) {
+      console.error(`Clasament: meciul din ${this.roomId} nu s-a putut salva:`, err);
+    }
   }
 }

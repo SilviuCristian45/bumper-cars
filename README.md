@@ -33,6 +33,10 @@ timp te readuce în același joc, cu aceeași mașinuță (dacă deschizi între
 întâi dacă vrei să-l părăsești pe cel curent). Dacă serverul nu răspunde, meniul spune asta și propune jocul
 offline cu boți.
 
+Clasament all-time („Clasament” din meniu): intră doar meciurile online terminate cu cel puțin 2 oameni
+(boții nu contează), cel mai bun meci al fiecărei porecle, după puncte și apoi runde câștigate. La finalul
+meciului apare „Ai intrat în top!” sau „Record nou!”.
+
 ## Opțiuni de test în URL
 
 `?bots=1..5`, `?rounds=3|5|7`, `?seed=abc`, `?botlevel=usor|mediu|greu`, `?debug` (hitbox-uri, vectori, ce fac boții),

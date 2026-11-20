@@ -10,6 +10,8 @@ alias SSH `oracle`), lângă jocul cu trenul și Bombe și Petarde. Scripturile 
 | versiunea activă / anterioară | symlink-urile `/opt/masinute/current` și `/opt/masinute/current.prev` |
 | clientul servit de Caddy | `/var/www/masinute` → `/opt/masinute/current/client` |
 | serviciul | `masinute.service` (Node pe `127.0.0.1:2568`, `MemoryMax=250M`, heap `--max-old-space-size=170`, `Restart=always`) |
+| clasamentul | `/var/lib/masinute/leaderboard.db` (SQLite, WAL; `StateDirectory` al user-ului `masinute`) |
+| backup-ul clasamentului | `masinute-backup.timer` zilnic (~04:45) → `/var/lib/masinute/backups/leaderboard-AAAALLZZ.db`, ultimele 7 |
 | Caddy | blocul `masinute-balci.duckdns.org` din `/etc/caddy/Caddyfile` |
 
 **Nu se ating**: `bombe` (port 2567, `/opt/bombe`, `/var/www/bombe`, `bombe-petarde.duckdns.org`),
@@ -21,7 +23,9 @@ Fișiere:
 - `setup.sh`: instalarea inițială, pe VPS (o singură dată; poate fi rulat din nou fără efecte nedorite);
 - `push.ps1`: actualizare de pe Windows (teste, typecheck, build, upload, comutare atomică, health check, rollback);
 - `remote-update.sh`: partea de pe server a lui `push.ps1` (o urcă și o rulează el);
-- `masinute.service`, `Caddyfile`: unit-ul systemd și blocul Caddy, instalate de `setup.sh`.
+- `masinute.service`, `Caddyfile`: unit-ul systemd și blocul Caddy, instalate de `setup.sh`;
+- `masinute-backup.service`, `masinute-backup.timer`, `masinute-backup.sh`: backup-ul zilnic al clasamentului,
+  instalate tot de `setup.sh` (scriptul ajunge în `/usr/local/sbin/masinute-backup`).
 
 ## Înainte de prima instalare
 
@@ -63,7 +67,10 @@ Invoke-WebRequest https://masinute-balci.duckdns.org/colyseus/health -UseBasicPa
 4. creează user-ul `masinute`, `/opt/masinute/releases` și symlink-ul `/var/www/masinute`;
 5. instalează și activează `masinute.service` (îl repornește doar dacă unit-ul s-a schimbat; înainte de
    primul `push.ps1` nu pornește, pentru că nu există încă nicio versiune);
-6. dacă `/etc/caddy/Caddyfile` nu conține încă `masinute-balci.duckdns.org`: validează configurația existentă,
+6. instalează `sqlite3` (dacă lipsește) și backup-ul zilnic al clasamentului (`masinute-backup.timer`):
+   `sqlite3 .backup`, deci o copie consistentă chiar dacă serverul scrie în acel moment, verificată cu
+   `integrity_check`; se păstrează ultimele 7 zile;
+7. dacă `/etc/caddy/Caddyfile` nu conține încă `masinute-balci.duckdns.org`: validează configurația existentă,
    face un backup cu dată și oră (`Caddyfile.bak-AAAALLZZ-HHMMSS`), adaugă blocul, validează din nou
    (dacă pică, restaurează backup-ul și se oprește fără reload), apoi `systemctl reload caddy`.
    Dacă blocul există deja, nu modifică nimic.
@@ -100,8 +107,26 @@ Dacă oricare health check pică, revine automat la versiunea anterioară: versi
 `current.prev` rămâne cum era. Pe server se păstrează versiunea activă, cea anterioară și încă trei.
 
 Un restart pierde room-urile în curs (jucătorii văd „Conexiunea cu serverul s-a pierdut”), deci actualizează
-când nu se joacă nimeni. După o modificare a lui `masinute.service`, copiază din nou `deploy/` și rulează
-`setup.sh` (`push.ps1` nu instalează unit-uri).
+când nu se joacă nimeni. După o modificare a lui `masinute.service` sau a backup-ului, copiază din nou `deploy/`
+și rulează `setup.sh` (`push.ps1` nu instalează unit-uri).
+
+## Clasamentul
+
+Serverul ține clasamentul all-time în `/var/lib/masinute/leaderboard.db` (`DB_PATH` din `masinute.service`).
+Directorul e `StateDirectory=masinute`: îl creează systemd, aparține user-ului `masinute` și e singurul loc în
+care serviciul poate scrie (`ProtectSystem=strict` rămâne). Deploy-ul și rollback-ul lucrează doar în
+`/opt/masinute`, deci baza nu e atinsă niciodată. Schema se actualizează singură la pornire (migrații).
+Dacă baza nu poate fi deschisă, serverul pornește fără clasament (eroarea apare în `journalctl`) și jocul merge.
+
+```powershell
+ssh oracle "sudo systemctl start masinute-backup && sudo ls -la /var/lib/masinute/backups"   # backup manual
+ssh oracle "systemctl list-timers masinute-backup --no-pager"                                # următorul backup
+ssh oracle "curl -s http://127.0.0.1:2568/leaderboard"                                       # topul, ca JSON
+```
+
+Restaurare: `sudo systemctl stop masinute`, copiază backup-ul peste `/var/lib/masinute/leaderboard.db`
+(șterge `leaderboard.db-wal` și `leaderboard.db-shm`, păstrează owner-ul `masinute:masinute`),
+`sudo systemctl start masinute`.
 
 ## Util
 

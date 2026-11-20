@@ -44,3 +44,45 @@ export const ERR_IN_PROGRESS = 4003;
 
 /** Answer of GET /rooms/:code, used to explain a refused join. */
 export type RoomStatus = 'open' | 'full' | 'playing' | 'missing';
+
+/** Server -> clients once a finished online match is saved: who entered the top or beat their record. */
+export const MSG_RECORDS = 'records';
+export interface NewRecord {
+  playerId: string;
+  name: string;
+  /** 1-based place in the all-time leaderboard (one row per nickname). */
+  place: number;
+  /** 'top': now in the top LEADERBOARD_SIZE and was not before; 'record': beat their own best match. */
+  kind: 'top' | 'record';
+}
+export interface MatchRecords {
+  records: NewRecord[];
+}
+
+/** Rows in the all-time leaderboard (GET /leaderboard). */
+export const LEADERBOARD_SIZE = 15;
+/** Only online matches with at least this many human players count. */
+export const LEADERBOARD_MIN_HUMANS = 2;
+
+/** One row of GET /leaderboard: a nickname's best match, plus how many matches that nickname played. */
+export interface LeaderboardEntry {
+  place: number;
+  name: string;
+  points: number;
+  /** Rounds won in that match. */
+  wins: number;
+  knockouts: number;
+  selfOuts: number;
+  /** Rounds in that match. */
+  rounds: number;
+  /** Counted matches played under this nickname. */
+  matches: number;
+  /** When the best match ended, ISO 8601 in UTC. */
+  endedAt: string;
+}
+
+/** Answer of GET /leaderboard; `available` is false when the server has no database. */
+export interface LeaderboardResponse {
+  available: boolean;
+  entries: LeaderboardEntry[];
+}

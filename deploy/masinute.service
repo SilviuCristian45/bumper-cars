@@ -15,6 +15,11 @@ Environment=NODE_ENV=production
 Environment=HOST=127.0.0.1
 Environment=PORT=2568
 Environment=MAX_ROOMS=20
+# All-time leaderboard (SQLite, WAL). /var/lib/masinute belongs to the masinute user and lives outside
+# /opt/masinute, so deploys and rollbacks never touch it. node:sqlite needs no flag on Node >= 22.13.
+StateDirectory=masinute
+StateDirectoryMode=0750
+Environment=DB_PATH=/var/lib/masinute/leaderboard.db
 Restart=always
 RestartSec=3
 
@@ -22,7 +27,7 @@ RestartSec=3
 MemoryMax=250M
 Environment="NODE_OPTIONS=--max-old-space-size=170 --enable-source-maps"
 
-# Hardening (as bombe.service): the process only reads its bundle and listens on loopback.
+# Hardening (as bombe.service): the process reads its bundle, writes only its StateDirectory and listens on loopback.
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true

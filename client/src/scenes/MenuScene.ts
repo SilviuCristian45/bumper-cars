@@ -51,13 +51,19 @@ export class MenuScene extends Phaser.Scene {
 
     this.status = el('p', { class: 'message status', text: this.opts.message ?? '' });
     this.offlineButton = button('Joacă offline cu boți', () => this.onPlayOffline(), onlineEnabled ? 'secondary' : 'primary', 'medium');
+    // The all-time leaderboard lives on the server: an offline-only build has none.
+    const leaderboardButton = onlineEnabled ? button('Clasament', () => this.openLeaderboard(), 'secondary', 'small') : null;
     mountScreen(this, 'menu', [
       title(true),
       this.playingAs(),
       el('div', { class: 'cards' }, [this.createCreateCard(), this.createJoinCard()]),
       this.status,
       // One row, so a phone held sideways sees all of it ("Setări" only on touch devices).
-      el('div', { class: 'menu-footer' }, [this.offlineButton, isTouch ? button('Setări', () => openSettings(), 'secondary', 'small') : null]),
+      el('div', { class: 'menu-footer' }, [
+        leaderboardButton,
+        this.offlineButton,
+        isTouch ? button('Setări', () => openSettings(), 'secondary', 'small') : null,
+      ]),
       isTouch ? null : this.effectsToggle(),
       installHint(),
     ]);
@@ -164,6 +170,10 @@ export class MenuScene extends Phaser.Scene {
 
   private onCreateRoom(): void {
     void this.connect(createRoom(this.playerName()), 'Se creează jocul...');
+  }
+
+  private openLeaderboard(): void {
+    if (!this.busy) this.scene.start('leaderboard');
   }
 
   private onPlayOffline(): void {

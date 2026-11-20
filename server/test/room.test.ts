@@ -12,21 +12,26 @@ import {
   MAX_PLAYERS,
   MSG_EVENTS,
   MSG_PONG,
+  MSG_RECORDS,
   rebuildState,
   ROOM_NAME,
   type GameState,
+  type LeaderboardResponse,
+  type MatchRecords,
   type RemoteState,
   type TickEvents,
 } from '@masinute/shared';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createServer } from '../src/app';
 import { MAX_MESSAGES_PER_SECOND, MAX_ROOMS } from '../src/config';
+import { openLeaderboard, useLeaderboard, type Leaderboard } from '../src/leaderboard';
 import type { MasinuteRoom } from '../src/MasinuteRoom';
 
 // A real server on 2569: not the dev/production port (2568) and not Bombe și Petarde's.
 const TEST_PORT = 2569;
 
 let colyseus: ColyseusTestServer;
+let board: Leaderboard;
 
 beforeAll(async () => {
   // boot() would listen on its default port (2568) whatever port it is given for a Server instance.
@@ -39,6 +44,16 @@ afterAll(async () => {
 });
 beforeEach(async () => {
   await colyseus.cleanup();
+  board = openLeaderboard(':memory:')!;
+  useLeaderboard(board);
+});
+afterEach(() => {
+  useLeaderboard(null);
+  try {
+    board.close();
+  } catch {
+    // a test closed it already
+  }
 });
 
 /** The authoritative game state inside the server room. */
@@ -64,6 +79,17 @@ async function send(client: ClientRoom, room: MasinuteRoom, type: string, payloa
 /** Skips the "3, 2, 1" countdown so the next tick is a fighting one. */
 function skipCountdown(room: MasinuteRoom): void {
   game(room).roundTick = COUNTDOWN_TICKS;
+}
+
+/** Ends the match at once: last round, only `winnerId` left on the ring. */
+async function finishMatch(room: MasinuteRoom, winnerId: string): Promise<void> {
+  const g = game(room);
+  g.roundsTotal = 1;
+  g.roundTick = COUNTDOWN_TICKS;
+  for (const p of Object.values(g.players)) p.alive = p.id === winnerId;
+  for (let i = 0; i < 100 && g.phase !== 'finished'; i++) await room.waitForNextTimestep();
+  expect(g.phase).toBe('finished');
+  await room.waitForNextTimestep(); // the tick's messages are out
 }
 
 async function status(code: string): Promise<string> {
@@ -410,5 +436,110 @@ describe('MasinuteRoom', () => {
     const err = await rejection(create());
     expect(err.code).toBe(ERR_SERVER_FULL);
     expect(err.message).toBe('Serverul e plin');
+  });
+});
+
+describe('all-time leaderboard', () => {
+  it('saves a finished online match with two humans, without bots, and announces who entered the top', async () => {
+    const { client, room } = await create('Ana');
+    const guest = await join(client.roomId, 'Ion');
+    await send(client, room, 'addBot');
+    const records: MatchRecords[] = [];
+    client.onMessage(MSG_RECORDS, (msg: MatchRecords) => records.push(msg));
+    await send(client, room, 'start');
+    await finishMatch(room, client.sessionId);
+
+    expect(board.top().map((e) => [e.name, e.points, e.wins, e.matches])).toEqual([
+      ['Ana', 3, 1, 1],
+      ['Ion', 0, 0, 1],
+    ]);
+    await sleep(100);
+    expect(records).toEqual([
+      {
+        records: [
+          { playerId: client.sessionId, name: 'Ana', place: 1, kind: 'top' },
+          { playerId: guest.sessionId, name: 'Ion', place: 2, kind: 'top' },
+        ],
+      },
+    ]);
+
+    const res = await colyseus.http.get('/leaderboard');
+    const body = res.data as LeaderboardResponse;
+    expect(body.available).toBe(true);
+    expect(body.entries[0]).toMatchObject({ place: 1, name: 'Ana', points: 3, wins: 1, rounds: 1, matches: 1 });
+    // The SDK's HTTP client hands headers back as a plain object.
+    expect((res.headers as unknown as Record<string, string>)['cache-control']).toBe('public, max-age=30');
+  });
+
+  it('announces a beaten record in the next match', async () => {
+    const { client, room } = await create('Ana');
+    const guest = await join(client.roomId, 'Ion');
+    await send(client, room, 'start');
+    await finishMatch(room, client.sessionId); // Ana 3, Ion 0
+    await send(client, room, 'lobby');
+    const records: MatchRecords[] = [];
+    client.onMessage(MSG_RECORDS, (msg: MatchRecords) => records.push(msg));
+    await send(client, room, 'start');
+    await finishMatch(room, guest.sessionId); // Ion 3 beats his 0 (2nd: tied with Ana, who was first); Ana 0 is not her best
+    await sleep(100);
+    expect(records).toEqual([{ records: [{ playerId: guest.sessionId, name: 'Ion', place: 2, kind: 'record' }] }]);
+    expect(board.top().map((e) => [e.name, e.matches])).toEqual([
+      ['Ana', 2],
+      ['Ion', 2],
+    ]);
+  });
+
+  it('leaves out a player who left mid-match', async () => {
+    const { client, room } = await create('Ana');
+    const guest = await join(client.roomId, 'Ion');
+    await join(client.roomId, 'Vlad');
+    await send(client, room, 'start');
+    await guest.leave();
+    await room.waitForNextTimestep();
+    await finishMatch(room, client.sessionId);
+    expect(board.top().map((e) => e.name)).toEqual(['Ana', 'Vlad']);
+  });
+
+  it('does not count a match with a single human, however many bots', async () => {
+    const { client, room } = await create('Ana');
+    await send(client, room, 'addBot');
+    await send(client, room, 'addBot');
+    const records: MatchRecords[] = [];
+    client.onMessage(MSG_RECORDS, (msg: MatchRecords) => records.push(msg));
+    await send(client, room, 'start');
+    await finishMatch(room, client.sessionId);
+    await sleep(100);
+    expect(board.top()).toEqual([]);
+    expect(records).toEqual([]);
+  });
+
+  it('answers without a leaderboard when the server has no database', async () => {
+    useLeaderboard(null);
+    const res = await colyseus.http.get('/leaderboard');
+    expect(res.data).toEqual({ available: false, entries: [] });
+  });
+
+  it('finishes the match normally when the database fails', async () => {
+    const { client, room } = await create('Ana');
+    await join(client.roomId, 'Ion');
+    const events: TickEvents[] = [];
+    client.onMessage(MSG_EVENTS, (msg: TickEvents) => events.push(msg));
+    await send(client, room, 'start');
+    board.close(); // every write now throws
+    const original = console.error;
+    const errors: unknown[] = [];
+    console.error = (...args: unknown[]) => errors.push(args);
+    try {
+      await finishMatch(room, client.sessionId);
+    } finally {
+      console.error = original;
+    }
+    expect(errors).toHaveLength(1);
+    await sleep(100);
+    expect(events.flatMap((m) => m.events).some((e) => e.type === 'matchEnd')).toBe(true);
+    // The room carries on: back to the lobby for another match.
+    await send(client, room, 'lobby');
+    expect(game(room).phase).toBe('lobby');
+    expect(Object.values(game(room).players).every((p) => p.connected)).toBe(true);
   });
 });

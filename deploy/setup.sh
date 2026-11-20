@@ -2,7 +2,8 @@
 # Prima instalare Mașinuțe de Bâlci pe VPS (Ubuntu). Rulează pe server, din folderul deploy/ copiat acolo:
 #   sudo bash /tmp/masinute-deploy/setup.sh
 # Idempotent: îl poți rula de mai multe ori. Atinge doar ce ține de mașinuțe (user-ul masinute,
-# /opt/masinute, /var/www/masinute, masinute.service și blocul masinute-balci.duckdns.org din Caddyfile).
+# /opt/masinute, /var/www/masinute, /var/lib/masinute, masinute.service, masinute-backup.{service,timer},
+# /usr/local/sbin/masinute-backup și blocul masinute-balci.duckdns.org din Caddyfile).
 # Celelalte site-uri și servicii (bombe, cabina-api, tren-api, /var/www/bombe, /var/www/cabina) rămân
 # neatinse: nici nu sunt repornite, Caddy primește doar reload.
 # Codul jocului NU vine de aici: îl pune deploy/push.ps1 (de pe Windows), care îl și pornește.
@@ -17,6 +18,9 @@ BASE=/opt/masinute
 WEB=/var/www/masinute
 UNIT=masinute
 UNIT_FILE=/etc/systemd/system/$UNIT.service
+BACKUP_UNIT=masinute-backup
+BACKUP_SCRIPT=/usr/local/sbin/masinute-backup
+STATE=/var/lib/masinute
 PORT=2568
 CADDYFILE=/etc/caddy/Caddyfile
 NODE_MAJOR=22
@@ -26,7 +30,7 @@ say() { printf '\n==> %s\n' "$*"; }
 warn() { printf '\n!!! %s\n' "$*" >&2; }
 die() { printf '\nEROARE: %s\n' "$*" >&2; exit 1; }
 
-for f in "$HERE/masinute.service" "$HERE/Caddyfile"; do
+for f in "$HERE/masinute.service" "$HERE/Caddyfile" "$HERE/masinute-backup.service" "$HERE/masinute-backup.timer" "$HERE/masinute-backup.sh"; do
   [ -f "$f" ] || die "Lipsește $f. Copiază pe server tot folderul deploy/ (vezi deploy/README.md)."
 done
 command -v apt-get >/dev/null || die "Scriptul e pentru Ubuntu/Debian (apt-get)."
@@ -128,7 +132,33 @@ else
   echo "Încă nu e nicio versiune instalată: serviciul pornește la primul deploy/push.ps1."
 fi
 
-# 5. Caddy: blocul pentru domeniu, doar dacă lipsește
+# 5. Backup zilnic al clasamentului (/var/lib/masinute/leaderboard.db -> /var/lib/masinute/backups, ultimele 7 zile).
+# Baza o creează serverul la pornire, în StateDirectory (al user-ului masinute); deploy-ul și rollback-ul
+# lucrează doar în /opt/masinute, deci nu o ating niciodată.
+say "Backup zilnic al clasamentului"
+if ! command -v sqlite3 >/dev/null; then
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -qq
+  apt-get install -y -qq sqlite3 >/dev/null
+  echo "am instalat sqlite3"
+else
+  echo "sqlite3 există deja"
+fi
+# Scriptul vine poate de pe Windows: fără CRLF.
+tr -d '\r' < "$HERE/masinute-backup.sh" > "$BACKUP_SCRIPT.tmp"
+install -o root -g root -m 755 "$BACKUP_SCRIPT.tmp" "$BACKUP_SCRIPT"
+rm -f "$BACKUP_SCRIPT.tmp"
+for f in "$BACKUP_UNIT.service" "$BACKUP_UNIT.timer"; do
+  tr -d '\r' < "$HERE/$f" > "/etc/systemd/system/$f.tmp"
+  install -o root -g root -m 644 "/etc/systemd/system/$f.tmp" "/etc/systemd/system/$f"
+  rm -f "/etc/systemd/system/$f.tmp"
+done
+systemctl daemon-reload
+systemctl enable --now "$BACKUP_UNIT.timer" >/dev/null 2>&1
+echo "$BACKUP_UNIT.timer: următoarea rulare $(systemctl show "$BACKUP_UNIT.timer" --property=NextElapseUSecRealtime --value)"
+if [ -d "$STATE" ]; then ls -la "$STATE"; fi
+
+# 6. Caddy: blocul pentru domeniu, doar dacă lipsește
 say "Caddy ($DOMAIN)"
 command -v caddy >/dev/null || die "Caddy nu e instalat (pe acest VPS ar trebui să existe deja, pentru celelalte site-uri)."
 [ -f "$CADDYFILE" ] || die "Nu găsesc $CADDYFILE."
@@ -169,4 +199,5 @@ cat <<EOF
   1. De pe Windows, din repo:  .\\deploy\\push.ps1      (build, upload, pornește serviciul, health check)
   2. DuckDNS: $DOMAIN trebuie să arate spre IP-ul acestui VPS.
   3. Porturile 80 și 443 sunt deja deschise (le folosesc celelalte site-uri). Portul $PORT NU se deschide.
+  Clasamentul: $STATE/leaderboard.db; backup manual: sudo systemctl start $BACKUP_UNIT
 EOF

@@ -1,0 +1,11 @@
+[Unit]
+Description=Mașinuțe de Bâlci: backup zilnic al clasamentului
+
+[Timer]
+OnCalendar=*-*-* 04:45:00
+RandomizedDelaySec=20min
+# A day missed while the VPS was off is made up at the next boot.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

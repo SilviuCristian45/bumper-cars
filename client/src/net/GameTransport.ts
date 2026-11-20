@@ -1,4 +1,4 @@
-import type { ClientMessage, GameEvent, GameState } from '@masinute/shared';
+import type { ClientMessage, GameEvent, GameState, NewRecord } from '@masinute/shared';
 import type { DriveInput } from '../input/InputSource';
 import type { RenderView } from './view';
 
@@ -25,6 +25,8 @@ export interface GameTransport {
   update(dtMs: number): void;
   /** Where to draw the cars and the ring this frame (blended between ticks; online, own car predicted). */
   view(): RenderView;
+  /** Online: who entered the all-time top or beat their record in the match just finished (empty offline). */
+  newRecords(): readonly NewRecord[];
   /** Online only: connection numbers for ?debug. */
   netStats?(): NetStats;
   /** A room on the server, which others can join with its code. */
