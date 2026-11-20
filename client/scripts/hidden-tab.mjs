@@ -295,8 +295,11 @@ try {
     report.push(`  B internals: ${JSON.stringify(await B.eval(`(() => { const s = window.__game.scene.getScene('game'); const t = s.transport; return { canDrive: t.predictor.canDrive(), seq: t.predictor.seq, unconfirmed: t.predictor.unconfirmed, steer: t.steer, throttle: t.throttle, focus: document.hasFocus(), keyUp: s.input.keyboard.addKey('UP').isDown }; })()`))}`);
     report.push(`  server's B: ${JSON.stringify(await A.eval(`(() => { const s = window.__game.scene.getScene('game').transport.latest; const b = Object.values(s.players).find((p) => p.name === 'Ascuns'); return { lastSeq: b.lastSeq, steer: b.steer, throttle: b.throttle, connected: b.connected }; })()`))}`);
   }
-  ok(sceneMs >= 0 && sceneMs <= 1000, `B is in the game scene, HTML lobby gone, within 1 s (${sceneMs} ms)`);
-  ok(connectedMs >= 0 && connectedMs <= 1000, `B is connected, and the server knows it, within 1 s (${connectedMs} ms)`);
+  // --mode reload loads the whole page again (scripts, textures, a new connection): 2.5 s for that.
+  const backMs = MODE === 'reload' ? 2500 : 1000;
+  const backText = `${backMs / 1000} s`;
+  ok(sceneMs >= 0 && sceneMs <= backMs, `B is in the game scene, HTML lobby gone, within ${backText} (${sceneMs} ms)`);
+  ok(connectedMs >= 0 && connectedMs <= backMs, `B is connected, and the server knows it, within ${backText} (${connectedMs} ms)`);
   if (from) {
     ok(respondMs >= 0 && respondMs <= 1000, `the server moves B's car under B's keys within 1 s (${respondMs} ms)`);
     ok((await serverB())?.idle === false, 'B is no longer idle once driving again');
