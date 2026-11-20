@@ -15,6 +15,7 @@
     "build": "npm run build -w client && npm run build -w server",
     "preview": "npm run preview -w client",
     "test": "npm test -w shared && npm test -w client && npm test -w server",
+    "test:hidden-tab": "node client/scripts/hidden-tab.mjs",
     "sim": "npm run sim -w shared --",
     "og": "npm run og -w client",
     "typecheck": "npm run typecheck -w shared && npm run typecheck -w client && npm run typecheck -w server"

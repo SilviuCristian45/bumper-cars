@@ -122,6 +122,16 @@ export class Predictor {
     for (const input of this.pending) runTick(this.predicted, [{ ...input, playerId: this.playerId }]);
   }
 
+  /**
+   * Starts over from a server state, forgetting every unconfirmed input: for a page coming back from
+   * the background, whose old inputs are long past (they were sent, dropped or overtaken). Numbering
+   * goes on from the server's lastSeq, so new inputs are never taken for old ones.
+   */
+  resync(server: Readonly<GameState>): void {
+    this.pending = [];
+    this.reconcile(server);
+  }
+
   /** One client tick: numbers the input, applies it to the prediction and returns it for sending. */
   advance(input: Omit<CarInput, 'seq'>): CarInput {
     const numbered: CarInput = { seq: ++this.seq, steer: input.steer, throttle: input.throttle, boost: input.boost };

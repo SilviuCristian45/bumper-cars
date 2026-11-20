@@ -59,6 +59,8 @@ export class LobbyScene extends Phaser.Scene {
   private startButton!: HTMLButtonElement;
   private shareButton!: HTMLButtonElement;
   private copyReset?: Phaser.Time.TimerEvent;
+  /** The switch to the game scene is under way. */
+  private leaving = false;
   private hint!: HTMLElement;
   private countText!: HTMLElement;
   private banner!: ConnectionBanner;
@@ -73,6 +75,7 @@ export class LobbyScene extends Phaser.Scene {
     this.roundButtons = [];
     this.levelButtons = [];
     this.copyReset = undefined;
+    this.leaving = false;
   }
 
   create(): void {
@@ -85,6 +88,24 @@ export class LobbyScene extends Phaser.Scene {
 
     mountScreen(this, 'lobby', [el('div', { class: 'lobby-grid' }, [this.createHead(), this.createPlayers(), this.createSide()])]);
     this.banner = new ConnectionBanner(this);
+    // A match started while the page was in the background: switch as soon as it is shown again,
+    // not only from update() (no frames run while hidden).
+    document.addEventListener('visibilitychange', this.onVisible);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => document.removeEventListener('visibilitychange', this.onVisible));
+  }
+
+  private readonly onVisible = () => {
+    if (!document.hidden && this.scene.isActive()) this.enterGameIfStarted();
+  };
+
+  /** True (and the game scene starting) once the room has left the lobby. */
+  private enterGameIfStarted(): boolean {
+    if (this.leaving) return true;
+    if (this.transport.getState().phase === 'lobby') return false;
+    this.leaving = true; // the handler and update() may both see it before the switch happens
+    const data: GameSceneData = { transport: this.transport, debug, tune: false };
+    this.scene.start('game', data);
+    return true;
   }
 
   /** An offline room has no code worth sharing: nobody else can join it. */
@@ -161,12 +182,8 @@ export class LobbyScene extends Phaser.Scene {
     if (!this.banner.update(this.transport, time)) return;
     this.transport.update(delta);
     notifyPresence(this.transport);
+    if (this.enterGameIfStarted()) return;
     const state = this.transport.getState();
-    if (state.phase !== 'lobby') {
-      const data: GameSceneData = { transport: this.transport, debug, tune: false };
-      this.scene.start('game', data);
-      return;
-    }
     this.syncPlayers(state);
     this.syncControls(state);
   }

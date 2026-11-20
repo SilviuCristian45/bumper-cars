@@ -1,4 +1,4 @@
-import type { Room } from '@colyseus/sdk';
+import { CloseCode, type Room } from '@colyseus/sdk';
 import {
   angleDiff,
   CAR_RADIUS,
@@ -59,6 +59,8 @@ const PING_INTERVAL_MS = 1000;
 const MAX_FRAME_MS = 250;
 /** Events normally wait for their tick's state; a state that never comes must not hold them forever. */
 const MAX_EVENT_WAIT_MS = 500;
+/** No message at all for this long while the page is shown (pings go out every second): the connection is dead. */
+const SILENT_DEAD_MS = 4000;
 /** Effects of events this old are past (the tab was in the background): they are dropped, not replayed at once. */
 const STALE_EVENT_MS = 2000;
 const LOST_MESSAGE = 'Conexiunea cu serverul s-a pierdut.';
@@ -104,8 +106,11 @@ export class ColyseusTransport implements GameTransport {
   private pingMs = 0;
   private nextPingAt = 0;
   private readonly queued: { tick: number; at: number; events: GameEvent[]; ownDone: boolean }[] = [];
+  /** When the last message (state, events, pong) arrived: a pong is due every second while the page is shown. */
+  private lastHeardAt = performance.now();
   private readonly onVisibility = () => {
     if (document.hidden) this.releaseNow();
+    else this.backFromBackground();
   };
 
   constructor(
@@ -188,6 +193,12 @@ export class ColyseusTransport implements GameTransport {
       this.nextPingAt = now + PING_INTERVAL_MS;
       this.post({ type: 'ping', t: now });
     }
+    // A socket can look open long after the connection died (a phone that slept, a changed network):
+    // with no answer to several pings, hand it to the SDK's reconnection (the seat waits 15 s).
+    if (this.status === 'connected' && !document.hidden && now - this.lastHeardAt > SILENT_DEAD_MS) {
+      this.lastHeardAt = now;
+      this.room.connection.close(CloseCode.MAY_TRY_RECONNECT, 'no answer');
+    }
 
     this.acc += Math.min(dtMs, MAX_FRAME_MS);
     while (this.acc >= TICK_MS) {
@@ -247,6 +258,7 @@ export class ColyseusTransport implements GameTransport {
   /** Through the simulated network when ?lag/?jitter is on. */
   private receive(item: Incoming): void {
     const now = performance.now();
+    this.lastHeardAt = now;
     if (this.inbox.active) this.inbox.push(item, now);
     else this.handle(item, now);
   }
@@ -334,6 +346,48 @@ export class ColyseusTransport implements GameTransport {
     const input = this.predictor.advance({ steer: 0, throttle: 0, boost: false });
     for (const msg of this.outbox.take(Infinity)) this.transmit(msg);
     this.transmit({ type: 'input', ...input });
+  }
+
+  /**
+   * The page is shown again after any time in the background (no frames ran meanwhile, but states
+   * kept arriving): start over from the newest server state instead of catching up. The prediction
+   * forgets its unconfirmed inputs and numbers on from the server's lastSeq, the tick accumulator is
+   * empty (no burst of catch-up ticks), the view clock jumps to the newest state, and events that went
+   * stale meanwhile are dropped by flushEvents. A dropped connection is retried at once.
+   */
+  private backFromBackground(): void {
+    const now = performance.now();
+    this.acc = 0;
+    this.viewTick = -1;
+    this.predictor.resync(this.latest);
+    this.ownPrev = this.ownCur = this.ownPose();
+    this.offset = ZERO_POSE;
+    // getState() shows the newest state at once (scenes check the phase on visibilitychange too).
+    this.advanceViewClock(0);
+    this.buildView();
+    // Ping now; the dead-connection check counts from here (no pongs came while hidden in the lobby).
+    this.lastHeardAt = now;
+    this.nextPingAt = 0;
+    if (this.status === 'reconnecting') this.retryNow();
+  }
+
+  /**
+   * The SDK's own retries back off up to 5 s and ran on while the page was hidden (and its timers were
+   * throttled): without this, a player coming back could wait seconds with a frozen game. Reaches into
+   * the SDK (no public API for it); if that changes, its normal schedule still applies.
+   */
+  private retryNow(): void {
+    const room = this.room as unknown as {
+      retryTimeout?: ReturnType<typeof setTimeout>;
+      retryReconnection?: () => void;
+      reconnection: { retryCount: number; isReconnecting: boolean };
+      connection: { transport?: { ws?: WebSocket } };
+    };
+    if (typeof room.retryReconnection !== 'function' || !room.reconnection.isReconnecting) return;
+    room.reconnection.retryCount = 0; // a fresh set of attempts from now on
+    if (room.connection.transport?.ws?.readyState === WebSocket.CONNECTING) return; // an attempt is under way
+    clearTimeout(room.retryTimeout);
+    room.retryReconnection();
   }
 
   private ownPose(): Pose | null {

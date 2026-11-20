@@ -129,6 +129,22 @@ describe('Predictor', () => {
     expect(predictor.state).toEqual(server);
   });
 
+  it('starts over from the server after the page was in the background, numbering on', () => {
+    const server = makeRace([{ id: 'me' }, { id: 'b', x: px(200) }]);
+    const predictor = new Predictor('me');
+    predictor.reconcile(server);
+    // Inputs from before the tab was hidden that the server never applied (lost with a dropped connection).
+    for (let i = 0; i < 5; i++) predictor.advance({ steer: 100, throttle: 100, boost: false });
+    for (let t = 0; t < 300; t++) runTick(server, []); // ten seconds pass on the server
+    predictor.resync(server);
+    expect(predictor.unconfirmed).toBe(0);
+    expect(predictor.state).toEqual(server); // nothing stale replayed on top
+    const next = predictor.advance({ steer: 0, throttle: 100, boost: false });
+    expect(next.seq).toBe(6); // after the old ones: never mistaken for a repeat
+    runTick(server, [{ ...next, playerId: 'me' }]);
+    expect(predictor.state).toEqual(server);
+  });
+
   it('corrects a contested pickup the server gave to someone else', () => {
     const server = makeRace([{ id: 'me', x: -px(60) }, { id: 'foe', x: px(60), heading: 512 }]);
     Object.assign(server, { powerups: true, puTimer: 1_000_000, pu0Kind: PU_SPRINGS, pu0X: 0, pu0Y: 0, pu0Ticks: 300 });

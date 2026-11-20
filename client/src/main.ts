@@ -81,6 +81,8 @@ const game = new Phaser.Game({
   // The canvas only sees one finger at a time (overlay taps); the HTML touch controls track their own.
   input: { activePointers: 1 },
 });
+// ?debug: the game object for scripted browser tests (which scene runs, the transport's state).
+if (debug) (window as unknown as { __game?: Phaser.Game }).__game = game;
 initMute(game);
 initSfx(game);
 initMusic(game);
