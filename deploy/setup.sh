@@ -126,8 +126,13 @@ systemctl enable "$UNIT" >/dev/null 2>&1
 if [ -f "$BASE/current/server/index.js" ]; then
   # Un restart pierde room-urile în curs: doar dacă unit-ul s-a schimbat.
   if [ "$unit_changed" = 1 ]; then systemctl restart "$UNIT"; else systemctl start "$UNIT"; fi
-  sleep 2
-  if curl -fsS "http://127.0.0.1:$PORT/health"; then echo; else warn "Serverul nu răspunde. Vezi: journalctl -u $UNIT -n 50 --no-pager"; fi
+  # Node needs a few seconds to start (and open the leaderboard): wait up to 15 s.
+  up=0
+  for _ in $(seq 1 15); do
+    sleep 1
+    if curl -fsS --max-time 2 "http://127.0.0.1:$PORT/health"; then echo; up=1; break; fi
+  done
+  if [ "$up" = 0 ]; then warn "Serverul nu răspunde. Vezi: journalctl -u $UNIT -n 50 --no-pager"; fi
 else
   echo "Încă nu e nicio versiune instalată: serviciul pornește la primul deploy/push.ps1."
 fi
