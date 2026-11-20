@@ -18,6 +18,7 @@ npm run typecheck    # tsc for shared + client + server
 npm run build        # client/dist (static) + server/dist/index.js (single esbuild bundle)
 npm run sim -- --bots usor,mediu,greu,greu --rounds 5 --seed abc -v   # headless bots-only match, prints rounds + standings
 npm run balance -w shared -- --matches 40 --lineup usor,usor,mediu,mediu,greu,greu   # bot tournament stats per level
+npm run og           # redraws client/public/og.png (link preview) + favicons from client/assets-src/icons.mjs (resvg)
 ```
 
 Single test file / test name:
