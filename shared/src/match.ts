@@ -137,12 +137,15 @@ export function addPlayer(state: GameState, id: string, name: string, isBot = fa
     points: 0,
     bumps: 0,
     pickups: 0,
+    giantKnockouts: 0,
     effect: 0,
     effectTicks: 0,
     confusedTicks: 0,
     oilX: 0,
     oilY: 0,
     oilTicks: 0,
+    sizePct: 100,
+    ghostFade: 0,
     idle: false,
   };
   state.players[id] = player;
@@ -266,6 +269,7 @@ export function startMatch(state: GameState, byId: string): boolean {
     p.points = 0;
     p.bumps = 0;
     p.pickups = 0;
+    p.giantKnockouts = 0;
   }
   state.round = 1;
   startRound(state);
@@ -324,6 +328,8 @@ export function startRound(state: GameState): void {
     p.effectTicks = 0;
     p.confusedTicks = 0;
     p.oilTicks = 0;
+    p.sizePct = 100;
+    p.ghostFade = 0;
   }
 }
 

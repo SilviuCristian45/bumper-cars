@@ -54,6 +54,15 @@ const SPECS: Spec[] = [
   { key: 'tuicaConfuseTicks', constant: 'TUICA_CONFUSE_TICKS', label: 'Țuică: comenzi inversate', min: TICK_RATE, max: 10 * TICK_RATE, step: TICK_RATE / 2, unit: seconds },
   { key: 'springsTicks', constant: 'SPRINGS_TICKS', label: 'Arcuri: durată', min: TICK_RATE, max: 20 * TICK_RATE, step: TICK_RATE / 2, unit: seconds },
   { key: 'springsPct', constant: 'SPRINGS_PCT', label: 'Arcuri: putere', min: 100, max: 400, step: 10, unit: percent },
+  { key: 'sodaTicks', constant: 'SODA_TICKS', label: 'Suc: durată', min: TICK_RATE, max: 20 * TICK_RATE, step: TICK_RATE / 2, unit: seconds },
+  { key: 'sodaSpeedPct', constant: 'SODA_SPEED_PCT', label: 'Suc: viteză maximă', min: 100, max: 250, step: 5, unit: percent },
+  { key: 'sodaAccelPct', constant: 'SODA_ACCEL_PCT', label: 'Suc: accelerație', min: 100, max: 300, step: 5, unit: percent },
+  { key: 'sodaGripPct', constant: 'SODA_GRIP_PCT', label: 'Suc: aderență', min: 20, max: 100, step: 5, unit: percent },
+  { key: 'proteinTicks', constant: 'PROTEIN_TICKS', label: 'Proteină: durată', min: TICK_RATE, max: 20 * TICK_RATE, step: TICK_RATE / 2, unit: seconds },
+  { key: 'proteinSizePct', constant: 'PROTEIN_SIZE_PCT', label: 'Proteină: rază', min: 100, max: 250, step: 5, unit: percent },
+  { key: 'proteinMassPct', constant: 'PROTEIN_MASS_PCT', label: 'Proteină: masă', min: 100, max: 600, step: 10, unit: percent },
+  { key: 'proteinAccelPct', constant: 'PROTEIN_ACCEL_PCT', label: 'Proteină: accelerație', min: 40, max: 100, step: 1, unit: percent },
+  { key: 'ghostTicks', constant: 'GHOST_TICKS', label: 'Fantomă: durată', min: TICK_RATE, max: 20 * TICK_RATE, step: TICK_RATE / 2, unit: seconds },
 ];
 
 const STORAGE_KEY = 'tune';

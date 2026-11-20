@@ -19,6 +19,10 @@ export const SFX_NAMES = [
   'sughit', // Țuică: someone's steering is turned around
   'boing', // a hit with Bară cu arcuri
   'colac', // Colac de salvare saves a car
+  'fasait', // Suc Zero Zahăr: a can opened
+  'ragait', // Suc Zero Zahăr runs out: a burp
+  'flex', // Pudră proteică: a deep "flex" grunt
+  'fantoma', // Fantomă: "uuuu"
 ] as const;
 export type SfxName = (typeof SFX_NAMES)[number];
 
@@ -154,6 +158,72 @@ const SYNTH: Record<SfxName, Synth> = {
   },
   colac: (ctx, out, t) => {
     [392, 523, 659, 784].forEach((f, i) => tone(ctx, out, t + i * 0.07, { type: 'triangle', from: f, dur: 0.14, vol: 0.22 }));
+  },
+  // A can opened: a sharp "pssht" and fizz settling down.
+  fasait: (ctx, out, t) => {
+    noise(ctx, out, t, { dur: 0.12, vol: 0.35, filter: 'highpass', from: 5000, to: 3000 });
+    noise(ctx, out, t + 0.05, { dur: 0.6, vol: 0.12, filter: 'bandpass', from: 7000, to: 4000 });
+  },
+  // A cartoon burp: a low wobbling buzz that drops.
+  ragait: (ctx, out, t) => {
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 700;
+    filter.connect(out);
+    const osc = ctx.createOscillator();
+    const wobble = ctx.createOscillator();
+    const depth = ctx.createGain();
+    const gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(110, t);
+    osc.frequency.exponentialRampToValueAtTime(70, t + 0.4);
+    wobble.frequency.value = 28;
+    depth.gain.value = 25;
+    wobble.connect(depth).connect(osc.frequency);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.4, t + 0.04);
+    gain.gain.setValueAtTime(0.4, t + 0.25);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
+    osc.connect(gain).connect(filter);
+    osc.start(t);
+    wobble.start(t);
+    osc.stop(t + 0.47);
+    wobble.stop(t + 0.47);
+  },
+  // A deep strained "hnngh" with a creak of muscle: low notes swelling up.
+  flex: (ctx, out, t) => {
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(400, t);
+    filter.frequency.exponentialRampToValueAtTime(900, t + 0.35);
+    filter.connect(out);
+    tone(ctx, filter, t, { type: 'sawtooth', from: 70, to: 95, dur: 0.55, vol: 0.3, hold: 0.35 });
+    tone(ctx, filter, t, { type: 'square', from: 105, to: 140, dur: 0.55, vol: 0.08, hold: 0.35 });
+    noise(ctx, out, t + 0.3, { dur: 0.12, vol: 0.12, filter: 'bandpass', from: 1800, to: 900 });
+  },
+  // A spooky "uuuu": a breathy sine sliding up and down with vibrato.
+  fantoma: (ctx, out, t) => {
+    const osc = ctx.createOscillator();
+    const vib = ctx.createOscillator();
+    const depth = ctx.createGain();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(330, t);
+    osc.frequency.linearRampToValueAtTime(520, t + 0.4);
+    osc.frequency.linearRampToValueAtTime(300, t + 1);
+    vib.frequency.value = 6;
+    depth.gain.value = 14;
+    vib.connect(depth).connect(osc.frequency);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.28, t + 0.15);
+    gain.gain.setValueAtTime(0.28, t + 0.7);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 1.05);
+    osc.connect(gain).connect(out);
+    osc.start(t);
+    vib.start(t);
+    osc.stop(t + 1.1);
+    vib.stop(t + 1.1);
+    noise(ctx, out, t, { dur: 0.9, vol: 0.04, filter: 'bandpass', from: 900, to: 600 });
   },
 };
 

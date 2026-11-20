@@ -4,7 +4,7 @@ import type { GameState, PlayerState } from './types';
 // Light-hearted titles shown under the podium at the end of a match (as in Bombe și Petarde).
 // Names and wording live in the client; here only who earned what.
 
-export type AwardId = 'batausul' | 'kamikaze' | 'neclintitul' | 'ciocanarul' | 'colectionarul';
+export type AwardId = 'batausul' | 'kamikaze' | 'neclintitul' | 'ciocanarul' | 'colectionarul' | 'uriasul';
 
 export interface Award {
   id: AwardId;
@@ -28,6 +28,8 @@ const RULES: readonly Rule[] = [
   { id: 'neclintitul', stat: (p) => p.outs, most: false, eligible: (p) => !p.left },
   { id: 'ciocanarul', stat: (p) => p.bumps, most: true },
   { id: 'colectionarul', stat: (p) => p.pickups, most: true },
+  // Knockouts while big from Pudră proteică.
+  { id: 'uriasul', stat: (p) => p.giantKnockouts, most: true },
 ];
 
 /**

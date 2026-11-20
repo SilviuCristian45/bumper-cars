@@ -77,6 +77,23 @@ export function boostPuff(scene: Phaser.Scene, x: number, y: number, angle: numb
   });
 }
 
+/** Suc Zero Zahăr: a few fizzy bubbles left behind the car (called every few frames while it lasts). */
+export function sodaBubbles(scene: Phaser.Scene, x: number, y: number, angle: number): void {
+  const deg = Phaser.Math.RadToDeg(angle + Math.PI);
+  burst(scene, x - Math.cos(angle) * 18, y - Math.sin(angle) * 18, {
+    count: 3,
+    lifespanMs: 700,
+    depth: DEPTH.marks,
+    config: {
+      angle: { min: deg - 35, max: deg + 35 },
+      speed: { min: 10, max: 45 },
+      scale: { start: 0.6, end: 1.4 },
+      alpha: { start: 0.75, end: 0 },
+      tint: [0xc8fff0, 0x7af0bf, 0xffffff],
+    },
+  });
+}
+
 /** A ring of sparks where a car left the arena. */
 export function outBurst(scene: Phaser.Scene, x: number, y: number, color: number): void {
   burst(scene, x, y, {

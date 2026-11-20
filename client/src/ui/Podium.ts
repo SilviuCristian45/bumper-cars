@@ -42,6 +42,7 @@ const AWARD_TEXT: Record<AwardId, { title: string; detail: (n: number) => string
   neclintitul: { title: 'Neclintitul', detail: (n) => (n === 0 ? 'n-a ieșit niciodată din ring' : `cele mai puține ieșiri (${n})`) },
   ciocanarul: { title: 'Ciocănarul', detail: (n) => `cele mai multe lovituri (${n})` },
   colectionarul: { title: 'Colecționarul', detail: (n) => `${n} power-up-uri adunate` },
+  uriasul: { title: 'Uriașul', detail: (n) => `${n} ${n === 1 ? 'scos' : 'scoși'} din ring cât era mare` },
 };
 
 export interface PodiumOptions {

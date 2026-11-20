@@ -1,9 +1,24 @@
-import { BOT_EASY, BOT_HARD, BOT_MEDIUM, CAR_RADIUS, FP, INPUT_MAX, PU_LIFEBUOY, PU_MICI, PU_OIL, PU_SPRINGS, PU_TUICA } from './constants';
+import {
+  BOT_EASY,
+  BOT_HARD,
+  BOT_MEDIUM,
+  CAR_RADIUS,
+  FP,
+  INPUT_MAX,
+  PU_LIFEBUOY,
+  PU_MICI,
+  PU_OIL,
+  PU_PROTEIN,
+  PU_SODA,
+  PU_SPRINGS,
+  PU_TUICA,
+} from './constants';
 import { angleDiff, clamp, hash32, iatan2, icos, idiv, isin, isqrt, percent, TRIG_ONE } from './fixed';
 import { sortedPlayers } from './match';
-import { forwardSpeed } from './physics';
+import { carRadius, forwardSpeed, isGhost } from './physics';
 import { livePowerups, type PowerupSlot } from './powerups';
 import { countdownSeconds } from './sim';
+import { TUNING } from './tuning';
 import type { CarInput, GameState, PlayerState } from './types';
 
 // Bots: one decision procedure for every level; the levels only differ in the numbers below.
@@ -33,8 +48,11 @@ export interface BotParams {
   pickupChance: number;
   /** Power-ups further than this are ignored. */
   pickupRange: number;
-  /** Chooses well: skips a power-up another car will reach first, steers right while confused. */
+  /** Chooses well: skips a power-up another car will reach first, steers right while confused, rams
+   *  rivals near the edge with Suc Zero Zahăr, keeps away from giants. */
   smart: boolean;
+  /** Looks further ahead at the edge while Suc Zero Zahăr makes it fast (without it, the speed surprises it). */
+  sodaCareful: boolean;
 }
 
 export const BOT_PARAMS: Record<number, BotParams> = {
@@ -51,6 +69,7 @@ export const BOT_PARAMS: Record<number, BotParams> = {
     pickupChance: 30,
     pickupRange: 110 * FP,
     smart: false,
+    sodaCareful: false,
   },
   [BOT_MEDIUM]: {
     interval: 4,
@@ -65,6 +84,7 @@ export const BOT_PARAMS: Record<number, BotParams> = {
     pickupChance: 65,
     pickupRange: 180 * FP,
     smart: false,
+    sodaCareful: true,
   },
   [BOT_HARD]: {
     interval: 4,
@@ -79,10 +99,11 @@ export const BOT_PARAMS: Record<number, BotParams> = {
     pickupChance: 90,
     pickupRange: 260 * FP,
     smart: true,
+    sodaCareful: true,
   },
 };
 
-export type BotIntent = 'wait' | 'retreat' | 'fetch' | 'hunt' | 'cruise';
+export type BotIntent = 'wait' | 'retreat' | 'flee' | 'fetch' | 'hunt' | 'cruise';
 
 export interface BotThought {
   input: CarInput;
@@ -94,6 +115,10 @@ export interface BotThought {
 
 /** Steering gain: angle error (steps) to full steer. */
 const FULL_STEER_ERROR = 40;
+/** A smart bot keeps this far (plus the giant's radius) from a car grown by Pudră proteică. */
+const GIANT_FLEE_DISTANCE = 120 * FP;
+/** With Suc Zero Zahăr a smart bot hunts the rival closest to the edge among those this near. */
+const SODA_HUNT_RANGE = 260 * FP;
 
 function paramsFor(p: PlayerState): BotParams {
   return BOT_PARAMS[p.botLevel] ?? BOT_PARAMS[BOT_MEDIUM]!;
@@ -129,10 +154,15 @@ export function botThink(state: GameState, id: string): BotThought | null {
   const outward = myR > 0 ? idiv(me.vx * me.x + me.vy * me.y, myR) : 0;
   // Colac de salvare: a fall would be forgiven, so it dares to fight much closer to the edge.
   const brave = me.effect === PU_LIFEBUOY ? 2 : 1;
-  const danger = idiv(params.edgeMargin + Math.max(0, outward) * params.edgeLookahead, brave);
-  // Mici, springs or Țuică: built for hitting, so it always goes hunting and rams from further away.
-  const armed = me.effect === PU_MICI || me.effect === PU_SPRINGS || me.effect === PU_TUICA;
-  const aggression = armed ? 100 : params.aggression;
+  // Suc Zero Zahăr: a careful bot looks as much further ahead as it is faster.
+  const lookahead = me.effect === PU_SODA && params.sodaCareful ? idiv(params.edgeLookahead * TUNING.sodaSpeedPct, 100) : params.edgeLookahead;
+  const danger = idiv(params.edgeMargin + Math.max(0, outward) * lookahead, brave);
+  // Mici, springs, Țuică or a giant: built for hitting, so it always goes hunting and rams from further
+  // away. A smart bot also counts the soda (aimed at someone near the edge).
+  const sodaHunt = me.effect === PU_SODA && params.smart;
+  const armed = me.effect === PU_MICI || me.effect === PU_SPRINGS || me.effect === PU_TUICA || me.effect === PU_PROTEIN || sodaHunt;
+  // A smart ghost cannot hit anyone: it fetches or cruises.
+  const aggression = isGhost(me) && params.smart ? 0 : armed ? 100 : params.aggression;
   const boostRange = armed ? idiv(params.boostRange * 3, 2) : params.boostRange;
 
   let intent: BotIntent;
@@ -140,14 +170,24 @@ export function botThink(state: GameState, id: string): BotThought | null {
   let ty = 0;
   let victim: PlayerState | undefined;
   let item: PowerupSlot | undefined;
+  let giant: PlayerState | undefined;
 
   if (ring - myR < danger) {
     intent = 'retreat';
+  } else if (params.smart && me.sizePct <= 100 && me.effect !== PU_MICI && (giant = nearGiant(state, me))) {
+    intent = 'flee';
+    // Away from the giant, pulled toward the middle so the flight never ends over the edge.
+    const dx = me.x - giant.x;
+    const dy = me.y - giant.y;
+    const d = Math.max(1, isqrt(dx * dx + dy * dy));
+    const away = idiv(ring, 2);
+    tx = idiv(me.x + idiv(dx * away, d), 2);
+    ty = idiv(me.y + idiv(dy * away, d), 2);
   } else if (roll(4) < params.pickupChance && (item = pickPowerup(state, me, params, danger))) {
     intent = 'fetch';
     tx = item.x;
     ty = item.y;
-  } else if (roll(1) < aggression && (victim = pickVictim(state, me))) {
+  } else if (roll(1) < aggression && (victim = sodaHunt ? pickEdgeVictim(state, me) : pickVictim(state, me))) {
     intent = 'hunt';
     tx = victim.x;
     ty = victim.y;
@@ -166,7 +206,7 @@ export function botThink(state: GameState, id: string): BotThought | null {
   let steer = clamp(idiv(err * INPUT_MAX, FULL_STEER_ERROR), -INPUT_MAX, INPUT_MAX);
   const absErr = Math.abs(err);
   let throttle: number;
-  if (intent === 'retreat') {
+  if (intent === 'retreat' || intent === 'flee') {
     // Facing away from the center while sliding out: brake hard (backs toward the center).
     throttle = absErr > 300 ? -INPUT_MAX : absErr > 200 ? 0 : INPUT_MAX;
     if (throttle < 0) steer = 0;
@@ -213,7 +253,7 @@ function pickPowerup(state: GameState, me: PlayerState, params: BotParams, dange
     if (params.smart) {
       if (item.kind === PU_OIL && me.effect !== 0) continue; // it already has something better going
       const beaten = sortedPlayers(state).some((p) => {
-        if (!p.alive || p.id === me.id) return false;
+        if (!p.alive || p.id === me.id || isGhost(p)) return false;
         const ox = item.x - p.x;
         const oy = item.y - p.y;
         return isqrt(ox * ox + oy * oy) + CAR_RADIUS < d;
@@ -226,15 +266,50 @@ function pickPowerup(state: GameState, me: PlayerState, params: BotParams, dange
   return best;
 }
 
+/** A car still on the ring that a bot can see and hit (not a ghost). */
+function huntable(p: PlayerState, me: PlayerState): boolean {
+  return p.alive && p.id !== me.id && !isGhost(p);
+}
+
 /** Whom to hunt: the nearest car still on the ring. */
 function pickVictim(state: GameState, me: PlayerState): PlayerState | undefined {
   let best: PlayerState | undefined;
   let bestDist = Infinity;
   for (const p of sortedPlayers(state)) {
-    if (!p.alive || p.id === me.id) continue;
+    if (!huntable(p, me)) continue;
     const dist = distance(me, p);
     if (dist < bestDist) {
       bestDist = dist;
+      best = p;
+    }
+  }
+  return best;
+}
+
+/** Suc Zero Zahăr: the rival nearest the edge within SODA_HUNT_RANGE (else the nearest one). */
+function pickEdgeVictim(state: GameState, me: PlayerState): PlayerState | undefined {
+  let best: PlayerState | undefined;
+  let bestR = -1;
+  for (const p of sortedPlayers(state)) {
+    if (!huntable(p, me) || distance(me, p) > SODA_HUNT_RANGE) continue;
+    const r = radiusOf(p.x, p.y);
+    if (r > bestR) {
+      bestR = r;
+      best = p;
+    }
+  }
+  return best ?? pickVictim(state, me);
+}
+
+/** The nearest car grown by Pudră proteică that is too close for comfort. */
+function nearGiant(state: GameState, me: PlayerState): PlayerState | undefined {
+  let best: PlayerState | undefined;
+  let bestGap = Infinity;
+  for (const p of sortedPlayers(state)) {
+    if (!huntable(p, me) || p.sizePct <= 100) continue;
+    const gap = distance(me, p) - carRadius(p);
+    if (gap < GIANT_FLEE_DISTANCE && gap < bestGap) {
+      bestGap = gap;
       best = p;
     }
   }

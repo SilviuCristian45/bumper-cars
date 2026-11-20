@@ -1,4 +1,4 @@
-import { OIL_RADIUS, FP, PU_HORN, PU_LIFEBUOY, PU_MICI, PU_OIL, PU_SPRINGS, PU_TUICA } from '@masinute/shared';
+import { OIL_RADIUS, FP, PU_GHOST, PU_HORN, PU_LIFEBUOY, PU_MICI, PU_OIL, PU_PROTEIN, PU_SODA, PU_SPRINGS, PU_TUICA } from '@masinute/shared';
 
 // The power-up icons and the oil puddle, drawn with the 2D canvas API like every other texture.
 // Each icon sits on a dark round token with a colored rim, so it reads on the metal floor.
@@ -172,6 +172,105 @@ export const POWERUP_DRAW: Record<number, Draw> = {
     g.fillRect(15, 11, 22, 2);
     g.fillStyle = '#2b2233';
     g.fillRect(19, 40, 14, 3);
+  },
+  [PU_SODA]: (g) => {
+    token(g, '#3ddc97');
+    // A plain soda can (no brand), "0%" on its side, bubbles rising from the tab.
+    const body = g.createLinearGradient(16, 0, 36, 0);
+    body.addColorStop(0, '#1f8a5c');
+    body.addColorStop(0.35, '#7af0bf');
+    body.addColorStop(1, '#11583a');
+    g.fillStyle = body;
+    roundRect(g, 17, 15, 18, 26, 3);
+    g.fill();
+    const lid = g.createLinearGradient(16, 0, 36, 0);
+    lid.addColorStop(0, '#8d97a6');
+    lid.addColorStop(0.4, '#eef2f7');
+    lid.addColorStop(1, '#6b7482');
+    g.fillStyle = lid;
+    g.beginPath();
+    g.ellipse(26, 15, 9, 2.6, 0, 0, Math.PI * 2);
+    g.fill();
+    g.fillRect(17, 39, 18, 2);
+    g.fillStyle = '#ffffff';
+    g.font = 'bold 9px Arial, sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText('0%', 26, 29);
+    g.fillStyle = 'rgba(255,255,255,0.8)';
+    for (const [x, y, r] of [
+      [30, 10, 1.6],
+      [34, 6.5, 1.2],
+      [28, 5, 1],
+    ] as const) {
+      g.beginPath();
+      g.arc(x, y, r, 0, Math.PI * 2);
+      g.fill();
+    }
+  },
+  [PU_PROTEIN]: (g) => {
+    token(g, '#ff7b9c');
+    // A big tub of powder with a flexed arm on the label.
+    const tub = g.createLinearGradient(14, 0, 38, 0);
+    tub.addColorStop(0, '#2b2b38');
+    tub.addColorStop(0.4, '#55556a');
+    tub.addColorStop(1, '#1b1b24');
+    g.fillStyle = tub;
+    roundRect(g, 14, 17, 24, 23, 4);
+    g.fill();
+    g.fillStyle = '#ff7b9c';
+    roundRect(g, 13, 12, 26, 7, 2.5);
+    g.fill();
+    g.fillStyle = '#ffe0e8';
+    roundRect(g, 17, 22, 18, 14, 2);
+    g.fill();
+    // The biceps: forearm up, a round bulge.
+    g.fillStyle = '#e07a4f';
+    g.beginPath();
+    g.ellipse(25, 31, 5.5, 3.6, -0.2, 0, Math.PI * 2);
+    g.fill();
+    g.beginPath();
+    g.moveTo(28.5, 30);
+    g.lineTo(31.5, 24.5);
+    g.lineTo(33.5, 25.5);
+    g.lineTo(31, 32);
+    g.closePath();
+    g.fill();
+    g.beginPath();
+    g.arc(32.4, 24.2, 1.9, 0, Math.PI * 2);
+    g.fill();
+    g.strokeStyle = 'rgba(90,30,10,0.7)';
+    g.lineWidth = 0.8;
+    g.beginPath();
+    g.arc(25, 30, 2.6, Math.PI * 1.1, Math.PI * 1.85);
+    g.stroke();
+  },
+  [PU_GHOST]: (g) => {
+    token(g, '#d8e2ff');
+    // A little sheet ghost with a wavy hem.
+    const sheet = g.createLinearGradient(0, 12, 0, 40);
+    sheet.addColorStop(0, 'rgba(255,255,255,0.98)');
+    sheet.addColorStop(1, 'rgba(200,214,255,0.75)');
+    g.fillStyle = sheet;
+    g.beginPath();
+    g.moveTo(15, 38);
+    g.lineTo(15, 24);
+    g.arc(26, 24, 11, Math.PI, 0);
+    g.lineTo(37, 38);
+    for (let i = 0; i < 4; i++) {
+      const x0 = 37 - i * 5.5;
+      g.quadraticCurveTo(x0 - 2.75, i % 2 === 0 ? 34 : 41, x0 - 5.5, 38);
+    }
+    g.closePath();
+    g.fill();
+    g.fillStyle = '#1a1028';
+    g.beginPath();
+    g.ellipse(22, 24, 2, 3, 0, 0, Math.PI * 2);
+    g.ellipse(30, 24, 2, 3, 0, 0, Math.PI * 2);
+    g.fill();
+    g.beginPath();
+    g.ellipse(26, 31, 2.4, 2, 0, 0, Math.PI * 2);
+    g.fill();
   },
 };
 

@@ -62,12 +62,15 @@ export const PLAYER_STATE_KEYS = [
   'points',
   'bumps',
   'pickups',
+  'giantKnockouts',
   'effect',
   'effectTicks',
   'confusedTicks',
   'oilX',
   'oilY',
   'oilTicks',
+  'sizePct',
+  'ghostFade',
   'idle',
 ] as const satisfies readonly (keyof PlayerState)[];
 

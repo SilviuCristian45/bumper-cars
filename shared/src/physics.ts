@@ -2,10 +2,14 @@ import {
   BUMP_EVENT_MIN,
   CAR_MASS,
   CAR_RADIUS,
+  GHOST_SEPARATE_STEP,
   HIT_MIN_SPEED,
   INPUT_MAX,
   MAX_REVERSE_SPEED,
+  PU_GHOST,
   PU_MICI,
+  PU_PROTEIN,
+  PU_SODA,
   PU_SPRINGS,
   PU_TUICA,
   REVERSE_ACCEL,
@@ -31,9 +35,29 @@ function decay(v: number, k: number): number {
   return v > 0 ? Math.max(v - d, 0) : Math.min(v + d, 0);
 }
 
-/** Mici: a bit slower, in accel and top speed (percent; 100 otherwise). */
-function speedPct(p: PlayerState): number {
-  return p.effect === PU_MICI ? TUNING.miciSpeedPct : 100;
+/** Acceleration in percent: Mici a bit slower, Suc Zero Zahăr quicker, Pudră proteică a bit slower. */
+function accelPct(p: PlayerState): number {
+  if (p.effect === PU_MICI) return TUNING.miciSpeedPct;
+  if (p.effect === PU_SODA) return TUNING.sodaAccelPct;
+  if (p.effect === PU_PROTEIN) return TUNING.proteinAccelPct;
+  return 100;
+}
+
+/** Top speed in percent: Mici slower, Suc Zero Zahăr much faster. */
+function topSpeedPct(p: PlayerState): number {
+  if (p.effect === PU_MICI) return TUNING.miciSpeedPct;
+  if (p.effect === PU_SODA) return TUNING.sodaSpeedPct;
+  return 100;
+}
+
+/** The car's radius: CAR_RADIUS, bigger while Pudră proteică lasts (exactly CAR_RADIUS at 100%). */
+export function carRadius(p: Readonly<PlayerState>): number {
+  return p.sizePct === 100 ? CAR_RADIUS : idiv(CAR_RADIUS * p.sizePct, 100);
+}
+
+/** Fantomă: nothing touches it and it touches nothing. */
+export function isGhost(p: Readonly<PlayerState>): boolean {
+  return p.effect === PU_GHOST;
 }
 
 /** Scales by a percent, exact when it is 100 (power-ups off: the numbers stay what they were). */
@@ -62,7 +86,7 @@ export function driveCar(p: PlayerState, oiled = false): void {
   let side = idiv(-p.vx * sin + p.vy * cos, TRIG_ONE);
 
   let accel = 0;
-  if (p.throttle > 0) accel = idiv(p.throttle * pct(TUNING.accel, speedPct(p)), INPUT_MAX);
+  if (p.throttle > 0) accel = idiv(p.throttle * pct(TUNING.accel, accelPct(p)), INPUT_MAX);
   else if (p.throttle < 0) accel = idiv(p.throttle * (fwd > 0 ? TUNING.brake : REVERSE_ACCEL), INPUT_MAX);
   if (p.boostTicks > 0) {
     accel += TUNING.boostAccel;
@@ -73,14 +97,16 @@ export function driveCar(p: PlayerState, oiled = false): void {
   else fwd += accel;
   if (p.throttle <= 0 || fwd < 0) fwd = decay(fwd, TUNING.friction);
   else fwd = fwd - idiv(fwd * TUNING.friction, 1000);
-  side = decay(side, oiled ? TUNING.oilGrip : p.slideTicks > 0 ? TUNING.gripHit : TUNING.grip);
+  // Suc Zero Zahăr: less grip on top of the speed, hard to keep on the ring.
+  const grip = p.slideTicks > 0 ? TUNING.gripHit : TUNING.grip;
+  side = decay(side, oiled ? TUNING.oilGrip : p.effect === PU_SODA ? pct(grip, TUNING.sodaGripPct) : grip);
   if (p.slideTicks > 0) p.slideTicks--;
   if (fwd < -MAX_REVERSE_SPEED) fwd = -MAX_REVERSE_SPEED;
 
   p.vx = idiv(fwd * cos - side * sin, TRIG_ONE);
   p.vy = idiv(fwd * sin + side * cos, TRIG_ONE);
   if (p.boostTicks > 0) limitSpeed(p, TUNING.boostMaxSpeed, true);
-  else limitSpeed(p, pct(TUNING.maxSpeed, speedPct(p)), false);
+  else limitSpeed(p, pct(TUNING.maxSpeed, topSpeedPct(p)), false);
 
   p.x += p.vx;
   p.y += p.vy;
@@ -98,10 +124,20 @@ function limitSpeed(p: PlayerState, max: number, hard: boolean): void {
   p.vy = idiv(p.vy * target, sp);
 }
 
-/** A boosting car is heavier; Mici double that again. */
+/** A boosting car is heavier; Mici double that again; a giant's mass grows with its size. */
 export function massOf(p: PlayerState): number {
   const base = p.boostTicks > 0 ? TUNING.boostMass : CAR_MASS;
-  return p.effect === PU_MICI ? pct(base, TUNING.miciMassPct) : base;
+  if (p.effect === PU_MICI) return pct(base, TUNING.miciMassPct);
+  if (p.sizePct !== 100 || p.effect === PU_PROTEIN) return pct(base, giantMassPct(p));
+  return base;
+}
+
+/** Pudră proteică: full proteinMassPct at full size, in proportion while growing or shrinking. */
+function giantMassPct(p: PlayerState): number {
+  const span = TUNING.proteinSizePct - 100;
+  if (span <= 0) return p.effect === PU_PROTEIN ? TUNING.proteinMassPct : 100;
+  const grown = Math.min(Math.max(p.sizePct - 100, 0), span);
+  return 100 + idiv((TUNING.proteinMassPct - 100) * grown, span);
 }
 
 /**
@@ -110,9 +146,12 @@ export function massOf(p: PlayerState): number {
  * order so the result is deterministic.
  */
 export function collide(a: PlayerState, b: PlayerState, tick: number, events: GameEvent[]): void {
+  // Fantomă: passes through everyone, both ways.
+  if (isGhost(a) || isGhost(b)) return;
   let dx = b.x - a.x;
   let dy = b.y - a.y;
-  const minDist = 2 * CAR_RADIUS;
+  const ra = carRadius(a);
+  const minDist = ra + carRadius(b);
   const d2 = dx * dx + dy * dy;
   if (d2 >= minDist * minDist) return;
   let dist = isqrt(d2);
@@ -127,9 +166,21 @@ export function collide(a: PlayerState, b: PlayerState, tick: number, events: Ga
   const ny = idiv(dy * TRIG_ONE, dist);
   const ma = massOf(a);
   const mb = massOf(b);
+  const overlap = minDist - dist;
+
+  // A ghost that just reappeared on top of a car: they drift apart a little every tick, no impulse, no credit.
+  if (a.ghostFade > 0 || b.ghostFade > 0) {
+    const half = idiv(overlap, 2);
+    const stepA = Math.min(overlap - half, GHOST_SEPARATE_STEP);
+    const stepB = Math.min(half, GHOST_SEPARATE_STEP);
+    a.x -= idiv(stepA * nx, TRIG_ONE);
+    a.y -= idiv(stepA * ny, TRIG_ONE);
+    b.x += idiv(stepB * nx, TRIG_ONE);
+    b.y += idiv(stepB * ny, TRIG_ONE);
+    return;
+  }
 
   // Separate them in proportion to the other's mass.
-  const overlap = minDist - dist;
   const pushA = idiv(overlap * mb, ma + mb);
   const pushB = overlap - pushA;
   a.x -= idiv(pushA * nx, TRIG_ONE);
@@ -168,16 +219,16 @@ export function collide(a: PlayerState, b: PlayerState, tick: number, events: Ga
   if (impulse >= BUMP_EVENT_MIN) {
     if (aHits) a.bumps++;
     if (bHits) b.bumps++;
-    const cx = a.x + idiv(CAR_RADIUS * nx, TRIG_ONE);
-    const cy = a.y + idiv(CAR_RADIUS * ny, TRIG_ONE);
+    const cx = a.x + idiv(ra * nx, TRIG_ONE);
+    const cy = a.y + idiv(ra * ny, TRIG_ONE);
     if (aHits) powerHit(a, b, cx, cy, events);
     if (bHits) powerHit(b, a, cx, cy, events);
     events.push({
       type: 'bump',
       a: a.id,
       b: b.id,
-      x: a.x + idiv(CAR_RADIUS * nx, TRIG_ONE),
-      y: a.y + idiv(CAR_RADIUS * ny, TRIG_ONE),
+      x: cx,
+      y: cy,
       force: impulse,
     });
   }

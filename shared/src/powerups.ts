@@ -1,6 +1,7 @@
 import {
   CAR_MASS,
   CAR_RADIUS,
+  GHOST_SEPARATE_TICKS,
   POWERUP_CAR_CLEARANCE,
   POWERUP_EDGE_MARGIN,
   POWERUP_FIRST_TICKS,
@@ -13,17 +14,21 @@ import {
   POWERUP_SLOTS,
   POWERUP_SPACING,
   POWERUP_SPAWN_TRIES,
+  PROTEIN_GROW_TICKS,
+  PU_GHOST,
   PU_HORN,
   PU_LIFEBUOY,
   PU_MICI,
   PU_NONE,
   PU_OIL,
+  PU_PROTEIN,
+  PU_SODA,
   PU_SPRINGS,
   PU_TUICA,
   SLIDE_TICKS,
 } from './constants';
 import { ANGLE_STEPS, icos, idiv, isin, isqrt, TRIG_ONE } from './fixed';
-import { markHit, massOf } from './physics';
+import { carRadius, isGhost, markHit, massOf } from './physics';
 import { nextInt } from './rng';
 import { TUNING } from './tuning';
 import type { GameEvent, GameState, PlayerState } from './types';
@@ -86,6 +91,9 @@ export function effectDuration(kind: number): number {
   if (kind === PU_LIFEBUOY) return TUNING.lifebuoyTicks;
   if (kind === PU_TUICA) return TUNING.tuicaTicks;
   if (kind === PU_SPRINGS) return TUNING.springsTicks;
+  if (kind === PU_SODA) return TUNING.sodaTicks;
+  if (kind === PU_PROTEIN) return TUNING.proteinTicks;
+  if (kind === PU_GHOST) return TUNING.ghostTicks;
   return 0;
 }
 
@@ -95,11 +103,37 @@ function dist2(ax: number, ay: number, bx: number, by: number): number {
   return dx * dx + dy * dy;
 }
 
+/** The lasting effect ends (ran out or replaced): a ghost reappearing may have to drift apart from someone. */
+function endEffect(p: PlayerState): void {
+  if (p.effect === PU_GHOST) p.ghostFade = GHOST_SEPARATE_TICKS;
+  p.effect = PU_NONE;
+  p.effectTicks = 0;
+}
+
+/** Pudră proteică: the size moves toward its target (big while it lasts) over PROTEIN_GROW_TICKS. */
+function grow(p: PlayerState): void {
+  const target = p.effect === PU_PROTEIN ? TUNING.proteinSizePct : 100;
+  if (p.sizePct === target) return;
+  const step = Math.max(1, idiv(Math.abs(TUNING.proteinSizePct - 100) + PROTEIN_GROW_TICKS - 1, PROTEIN_GROW_TICKS));
+  p.sizePct = p.sizePct < target ? Math.min(target, p.sizePct + step) : Math.max(target, p.sizePct - step);
+}
+
+/** Whether a car overlaps any other (non-ghost) car still on the ring. */
+function overlapsSomeone(p: PlayerState, players: PlayerState[]): boolean {
+  const rp = carRadius(p);
+  return players.some((q) => {
+    if (q.id === p.id || !q.alive || isGhost(q)) return false;
+    const r = rp + carRadius(q);
+    return dist2(p.x, p.y, q.x, q.y) < r * r;
+  });
+}
+
 /**
- * Start of a fighting tick, before the cars move: timers run down and the oil puddles grip.
- * Returns the cars standing on someone else's puddle (driveCar gives them almost no grip).
+ * Start of a fighting tick, before the cars move: timers run down, giants grow or shrink and the
+ * oil puddles grip. Returns the cars standing on someone else's puddle (driveCar gives them almost
+ * no grip; a ghost too, it drives on the floor).
  */
-export function powerupsBeforeDrive(state: GameState, players: PlayerState[]): Set<string> {
+export function powerupsBeforeDrive(state: GameState, players: PlayerState[], events: GameEvent[]): Set<string> {
   const oiled = new Set<string>();
   if (!state.powerups) return oiled;
   for (const p of players) {
@@ -107,8 +141,12 @@ export function powerupsBeforeDrive(state: GameState, players: PlayerState[]): S
     if (p.confusedTicks > 0) p.confusedTicks--;
     if (p.effectTicks > 0) {
       p.effectTicks--;
-      if (p.effectTicks === 0) p.effect = PU_NONE;
+      if (p.effectTicks === 0) {
+        events.push({ type: 'effectEnd', playerId: p.id, kind: p.effect });
+        endEffect(p);
+      }
     }
+    grow(p);
   }
   const r2 = TUNING.oilRadius * TUNING.oilRadius;
   for (const p of players) {
@@ -131,11 +169,19 @@ export function powerupsBeforeDrive(state: GameState, players: PlayerState[]): S
  */
 export function powerupsAfterCollide(state: GameState, players: PlayerState[], events: GameEvent[]): void {
   if (!state.powerups) return;
-  const reach = CAR_RADIUS + POWERUP_RADIUS;
+  // A reappeared ghost is an ordinary car again once it is clear of everyone (or after a second).
+  for (const p of players) {
+    if (p.ghostFade <= 0) continue;
+    p.ghostFade--;
+    if (!p.alive || !overlapsSomeone(p, players)) p.ghostFade = 0;
+  }
   for (let i = 0; i < POWERUP_SLOTS; i++) {
     const item = powerupAt(state, i);
     if (item.kind === PU_NONE) continue;
-    const taker = players.find((p) => p.alive && dist2(p.x, p.y, item.x, item.y) <= reach * reach);
+    const taker = players.find((p) => {
+      const reach = carRadius(p) + POWERUP_RADIUS;
+      return p.alive && dist2(p.x, p.y, item.x, item.y) <= reach * reach;
+    });
     if (taker) {
       setPowerup(state, i, EMPTY);
       pickUp(state, taker, item.kind, players, events);
@@ -189,22 +235,24 @@ function pickUp(state: GameState, p: PlayerState, kind: number, players: PlayerS
     honk(state, p, players, events);
   } else if (kind === PU_OIL) {
     // Dropped right behind the car, so the owner drives away from it.
-    const back = CAR_RADIUS + TUNING.oilRadius;
+    const back = carRadius(p) + TUNING.oilRadius;
     p.oilX = p.x - idiv(back * icos(p.heading), TRIG_ONE);
     p.oilY = p.y - idiv(back * isin(p.heading), TRIG_ONE);
     p.oilTicks = TUNING.oilTicks;
   } else {
+    endEffect(p);
+    if (kind === PU_GHOST) p.ghostFade = 0; // still a ghost: nothing to drift apart from yet
     p.effect = kind;
     p.effectTicks = effectDuration(kind);
   }
 }
 
-/** Claxon de TIR: every car within reach is shoved away, harder the closer it is; counts as a hit. */
+/** Claxon de TIR: every car within reach is shoved away, harder the closer it is; counts as a hit. A ghost feels nothing. */
 function honk(state: GameState, p: PlayerState, players: PlayerState[], events: GameEvent[]): void {
   events.push({ type: 'horn', playerId: p.id, x: p.x, y: p.y });
   const radius = TUNING.hornRadius;
   for (const q of players) {
-    if (q.id === p.id || !q.alive) continue;
+    if (q.id === p.id || !q.alive || isGhost(q)) continue;
     let dx = q.x - p.x;
     let dy = q.y - p.y;
     let d = isqrt(dx * dx + dy * dy);

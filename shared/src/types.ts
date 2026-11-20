@@ -54,13 +54,16 @@ export interface PlayerState {
   points: number;
   bumps: number; // hits dealt, statistics only
   pickups: number; // power-ups picked up this match, statistics only
+  giantKnockouts: number; // knockouts while big from Pudră proteică this match, statistics only
   // Power-ups (all 0 when they are off)
-  effect: number; // active effect (PU_MICI, PU_LIFEBUOY, PU_TUICA, PU_SPRINGS) or PU_NONE
+  effect: number; // active effect (PU_MICI, PU_LIFEBUOY, PU_TUICA, PU_SPRINGS, PU_SODA, PU_PROTEIN, PU_GHOST) or PU_NONE
   effectTicks: number; // ticks left of it
   confusedTicks: number; // >0: steering reversed (hit by someone with Țuică)
   oilX: number; // this car's oil puddle (one at a time), live while oilTicks > 0
   oilY: number;
   oilTicks: number;
+  sizePct: number; // radius in percent of CAR_RADIUS: 100, up to proteinSizePct while Pudră proteică lasts (grows and shrinks gradually)
+  ghostFade: number; // >0 right after Fantomă ended on top of a car: collisions with it only drift apart gently
   // Set by the server room, outside the simulation (which never reads it): a player with no input for
   // IDLE_TICKS while a round is played (tab in the background, connection down). Others see "zzz".
   idle: boolean;
@@ -119,4 +122,6 @@ export type GameEvent =
   /** Țuică: `playerId` was hit by `byId` and steers backwards for a while. */
   | { type: 'confused'; playerId: string; byId: string }
   /** A hit with Bară cu arcuri (x/y: contact point). */
-  | { type: 'spring'; playerId: string; x: number; y: number };
+  | { type: 'spring'; playerId: string; x: number; y: number }
+  /** A lasting effect ran out (not when a new pick-up replaced it). */
+  | { type: 'effectEnd'; playerId: string; kind: number };

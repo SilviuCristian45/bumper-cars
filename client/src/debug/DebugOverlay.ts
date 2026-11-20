@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import {
   CAR_RADIUS,
+  carRadius,
   FP,
   TICK_RATE,
   botThink,
@@ -25,6 +26,7 @@ import { POWERUP_INFO } from '../render/powerupInfo';
 const INTENTS: Record<BotIntent, { label: string; color: number }> = {
   wait: { label: 'așteaptă', color: 0xaaaaaa },
   retreat: { label: 'fuge spre centru', color: 0x4cc9f0 },
+  flee: { label: 'fuge de uriaș', color: 0xb388ff },
   fetch: { label: 'după power-up', color: 0xffd166 },
   hunt: { label: 'vânează', color: 0xff4d6d },
   cruise: { label: 'plimbare', color: 0x80ed99 },
@@ -91,7 +93,7 @@ export class DebugOverlay {
       if (!p.alive) continue;
       const pos = screenPos(p.id) ?? { x: toScreenX(p.x), y: toScreenY(p.y) };
       g.lineStyle(1, 0x00ff9c, 0.9);
-      g.strokeCircle(pos.x, pos.y, CAR_RADIUS / FP);
+      g.strokeCircle(pos.x, pos.y, carRadius(p) / FP);
       // Heading (white) and velocity (yellow).
       const a = (p.heading / 1024) * Math.PI * 2;
       g.lineStyle(1, 0xffffff, 0.8);
@@ -100,7 +102,7 @@ export class DebugOverlay {
       g.lineBetween(pos.x, pos.y, pos.x + (p.vx * VELOCITY_SCALE) / FP, pos.y + (p.vy * VELOCITY_SCALE) / FP);
       if (p.lastHitBy && state.tick - p.lastHitTick <= 3 * TICK_RATE) {
         g.lineStyle(2, 0xff4d6d, 0.8);
-        g.strokeCircle(pos.x, pos.y, CAR_RADIUS / FP + 4);
+        g.strokeCircle(pos.x, pos.y, carRadius(p) / FP + 4);
       }
 
       const thought = this.thoughts.get(p.id);

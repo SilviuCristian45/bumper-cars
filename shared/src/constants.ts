@@ -114,7 +114,13 @@ export const PU_OIL = 4;
 export const PU_TUICA = 5;
 /** Bară cu arcuri: your hits shove twice as hard, for a while. */
 export const PU_SPRINGS = 6;
-export const POWERUP_KINDS: readonly number[] = [PU_HORN, PU_MICI, PU_LIFEBUOY, PU_OIL, PU_TUICA, PU_SPRINGS];
+/** Suc Zero Zahăr: much faster and quicker off the mark, but it grips less (easy to fly off the ring). */
+export const PU_SODA = 7;
+/** Pudră proteică: the car grows (bigger radius, much heavier, a bit slower to accelerate) for a while. */
+export const PU_PROTEIN = 8;
+/** Fantomă: invisible to the others and untouchable (no collisions at all, ignored by the horn and the bots). */
+export const PU_GHOST = 9;
+export const POWERUP_KINDS: readonly number[] = [PU_HORN, PU_MICI, PU_LIFEBUOY, PU_OIL, PU_TUICA, PU_SPRINGS, PU_SODA, PU_PROTEIN, PU_GHOST];
 /** Power-ups lying on the ring at once (state slots pu0*, pu1*). */
 export const POWERUP_SLOTS = 2;
 /** The first one appears this long after START... */
@@ -152,3 +158,20 @@ export const TUICA_TICKS = 8 * TICK_RATE;
 export const TUICA_CONFUSE_TICKS = 4 * TICK_RATE;
 export const SPRINGS_TICKS = 5 * TICK_RATE;
 export const SPRINGS_PCT = 200;
+export const SODA_TICKS = 5 * TICK_RATE;
+export const SODA_SPEED_PCT = 160; // top speed
+export const SODA_ACCEL_PCT = 150;
+export const SODA_GRIP_PCT = 85; // sideways grip (a bit less: harder to keep on the ring, bounced further when hit)
+export const PROTEIN_TICKS = 6 * TICK_RATE;
+export const PROTEIN_SIZE_PCT = 170; // radius (~3 cars in area)
+export const PROTEIN_MASS_PCT = 300;
+export const PROTEIN_ACCEL_PCT = 85;
+/** Growing to full size (and shrinking back) takes this long. */
+export const PROTEIN_GROW_TICKS = 9; // ~0.3 s
+export const GHOST_TICKS = 5 * TICK_RATE;
+/**
+ * A ghost that reappears on top of a car: the two drift apart gently (no impulse, no knockout
+ * credit) at up to this many sub-units per tick each, for at most GHOST_SEPARATE_TICKS.
+ */
+export const GHOST_SEPARATE_STEP = 3 * FP;
+export const GHOST_SEPARATE_TICKS = TICK_RATE;

@@ -1,6 +1,6 @@
 // Bots-only tournament over many seeds: round wins, points and timings per bot level, and how
 // each power-up kind plays out (pickups, how often its picker wins the round, its knockouts).
-//   npm run balance -w shared -- --matches 40 --lineup usor,usor,mediu,mediu,greu,greu [--powerups off]
+//   npm run balance -w shared -- --matches 40 --lineup usor,usor,mediu,mediu,greu,greu [--powerups off] [--set proteinMassPct=250,sodaGripPct=85]
 import { parseArgs } from 'node:util';
 import {
   BOT_EASY,
@@ -11,11 +11,15 @@ import {
   PU_LIFEBUOY,
   PU_MICI,
   PU_OIL,
+  PU_GHOST,
+  PU_PROTEIN,
+  PU_SODA,
   PU_SPRINGS,
   PU_TUICA,
   TICK_RATE,
   TUNING,
   addPlayer,
+  setTuning,
   createGameState,
   fightTicks,
   runTick,
@@ -30,8 +34,15 @@ const { values } = parseArgs({
     matches: { type: 'string', default: '40' },
     lineup: { type: 'string', default: 'usor,usor,mediu,mediu,greu,greu' },
     powerups: { type: 'string', default: 'on' }, // on | off
+    set: { type: 'string', default: '' }, // TUNING overrides: key=value,key=value
   },
 });
+if (values.set) {
+  const overrides = Object.fromEntries(values.set.split(',').map((kv) => kv.split('=')).map(([k, v]) => [k!.trim(), Number(v)]));
+  for (const key of Object.keys(overrides)) if (!(key in TUNING)) throw new Error(`cheie TUNING necunoscută: ${key}`);
+  setTuning(overrides);
+  console.log(`TUNING: ${JSON.stringify(overrides)}`);
+}
 const lineup = values.lineup.split(',').map((s) => LEVELS[s.trim()]!);
 
 const wins = [0, 0, 0];
@@ -51,6 +62,9 @@ const KIND_NAMES: Record<number, string> = {
   [PU_OIL]: 'Ulei',
   [PU_TUICA]: 'Țuică',
   [PU_SPRINGS]: 'Arcuri',
+  [PU_SODA]: 'Suc',
+  [PU_PROTEIN]: 'Proteină',
+  [PU_GHOST]: 'Fantomă',
 };
 const kindStats = new Map<number, { pickups: number; pairs: number; roundWins: number }>();
 for (const kind of Object.keys(KIND_NAMES).map(Number)) kindStats.set(kind, { pickups: 0, pairs: 0, roundWins: 0 });
@@ -60,6 +74,11 @@ let saves = 0;
 let confusions = 0;
 let confusedSelfOuts = 0;
 let racersPerRound = 0;
+/** Eliminations while the victim had the effect on (own fault or not). */
+const outWith = new Map<number, { self: number; knocked: number }>();
+for (const kind of [PU_MICI, PU_LIFEBUOY, PU_TUICA, PU_SPRINGS, PU_SODA, PU_PROTEIN, PU_GHOST]) outWith.set(kind, { self: 0, knocked: 0 });
+/** Knockouts dealt while having the effect on. */
+const knockoutsWith = new Map<number, number>();
 
 for (let m = 0; m < Number(values.matches); m++) {
   const state = createGameState({ code: 'BAL', seed: `balance-${m}` });
@@ -86,6 +105,15 @@ for (let m = 0; m < Number(values.matches); m++) {
       if (e.type === 'out') {
         const victim = state.players[e.playerId]!;
         if (!e.byId && victim.confusedTicks > 0) confusedSelfOuts++;
+        const vw = outWith.get(victim.effect);
+        if (vw) {
+          if (e.byId) vw.knocked++;
+          else vw.self++;
+        }
+        if (e.byId) {
+          const k = state.players[e.byId]!.effect;
+          knockoutsWith.set(k, (knockoutsWith.get(k) ?? 0) + 1);
+        }
         if (e.byId && state.tick - (lastHorn.get(e.byId) ?? -1e9) <= HIT_CREDIT_TICKS) hornKnockouts++;
         else if (e.byId) {
           const owner = state.players[e.byId]!;
@@ -141,6 +169,9 @@ if (values.powerups !== 'off') {
   console.log(`power-up-uri (o mașină oarecare câștigă runda în ${pct(rounds, racersPerRound)} din cazuri):`);
   for (const [kind, st] of kindStats) {
     console.log(`  ${KIND_NAMES[kind]!.padEnd(7)} luate ${String(st.pickups).padStart(4)}  cine l-a luat câștigă runda ${pct(st.roundWins, st.pairs)}`);
+  }
+  for (const [kind, o] of outWith) {
+    console.log(`  ${KIND_NAMES[kind]!.padEnd(8)} cu efectul activ: a scos ${String(knockoutsWith.get(kind) ?? 0).padStart(4)}, ieșit singur ${String(o.self).padStart(4)}, scos de alții ${String(o.knocked).padStart(4)}`);
   }
   console.log(`  eliminări după Claxon ${hornKnockouts}, din Ulei ${oilKnockouts}, salvări cu Colacul ${saves}, amețiți ${confusions} (ieșiți singuri amețiți ${confusedSelfOuts})`);
 }

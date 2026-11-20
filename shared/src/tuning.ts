@@ -15,10 +15,19 @@ import {
   MICI_MASS_PCT,
   MICI_SPEED_PCT,
   MICI_TICKS,
+  GHOST_TICKS,
   OIL_GRIP,
   OIL_RADIUS,
   OIL_TICKS,
+  PROTEIN_ACCEL_PCT,
+  PROTEIN_MASS_PCT,
+  PROTEIN_SIZE_PCT,
+  PROTEIN_TICKS,
   RESTITUTION,
+  SODA_ACCEL_PCT,
+  SODA_GRIP_PCT,
+  SODA_SPEED_PCT,
+  SODA_TICKS,
   SPRINGS_PCT,
   SPRINGS_TICKS,
   TUICA_CONFUSE_TICKS,
@@ -58,6 +67,15 @@ export interface Tuning {
   tuicaConfuseTicks: number;
   springsTicks: number;
   springsPct: number;
+  sodaTicks: number;
+  sodaSpeedPct: number;
+  sodaAccelPct: number;
+  sodaGripPct: number;
+  proteinTicks: number;
+  proteinSizePct: number;
+  proteinMassPct: number;
+  proteinAccelPct: number;
+  ghostTicks: number;
 }
 
 export const DEFAULT_TUNING: Readonly<Tuning> = Object.freeze({
@@ -87,6 +105,15 @@ export const DEFAULT_TUNING: Readonly<Tuning> = Object.freeze({
   tuicaConfuseTicks: TUICA_CONFUSE_TICKS,
   springsTicks: SPRINGS_TICKS,
   springsPct: SPRINGS_PCT,
+  sodaTicks: SODA_TICKS,
+  sodaSpeedPct: SODA_SPEED_PCT,
+  sodaAccelPct: SODA_ACCEL_PCT,
+  sodaGripPct: SODA_GRIP_PCT,
+  proteinTicks: PROTEIN_TICKS,
+  proteinSizePct: PROTEIN_SIZE_PCT,
+  proteinMassPct: PROTEIN_MASS_PCT,
+  proteinAccelPct: PROTEIN_ACCEL_PCT,
+  ghostTicks: GHOST_TICKS,
 });
 
 /** Live values used by the simulation. Integers only. */

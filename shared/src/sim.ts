@@ -92,7 +92,7 @@ export function step(state: GameState): GameEvent[] {
   state.ringRadius = ringRadiusAt(state.roundTick);
 
   const racing = players.filter((p) => p.alive);
-  const oiled = powerupsBeforeDrive(state, players);
+  const oiled = powerupsBeforeDrive(state, players, events);
   for (const p of racing) {
     if (p.boostCooldown > 0) p.boostCooldown--;
     if (p.boostPressed) {
@@ -128,6 +128,8 @@ function eliminate(state: GameState, p: PlayerState, events: GameEvent[]): void 
     p.lastHitBy && state.tick - p.lastHitTick <= HIT_CREDIT_TICKS ? state.players[p.lastHitBy] : undefined;
   if (hitter && hitter.id !== p.id) {
     hitter.knockouts++;
+    // Pudră proteică: counted for the "Uriașul" award.
+    if (hitter.sizePct > 100) hitter.giantKnockouts++;
     hitter.points += POINTS_KNOCKOUT;
     events.push({ type: 'out', playerId: p.id, byId: hitter.id });
   } else {

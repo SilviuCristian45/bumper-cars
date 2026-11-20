@@ -5,7 +5,10 @@ import {
   BUMP_EVENT_MIN,
   FP,
   PLAYER_COLORS,
+  PU_GHOST,
   PU_HORN,
+  PU_PROTEIN,
+  PU_SODA,
   TICK_RATE,
   TUNING,
   applyGameTuning,
@@ -26,7 +29,7 @@ import type { GameTransport } from '../net/GameTransport';
 import type { RenderView } from '../net/view';
 import { Arena } from '../render/Arena';
 import { CarView } from '../render/CarView';
-import { playSfx } from '../audio/sfx';
+import { playSfx, type SfxName } from '../audio/sfx';
 import { bumpSparks, boostPuff, outBurst, powerupSparkle, shockwave } from '../render/fx';
 import { Hud } from '../render/Hud';
 import { PowerupLayer } from '../render/PowerupLayer';
@@ -57,6 +60,8 @@ export interface GameSceneData {
 const START_SHOWN_TICKS = Math.round(0.8 * TICK_RATE); // "START!" stays a moment after the countdown
 const FLOAT_MS = 1300;
 const hex = (c: number) => '#' + c.toString(16).padStart(6, '0');
+/** Power-ups with a sound of their own when picked up (the rest play 'ridicare'). */
+const PICKUP_SFX: Partial<Record<number, SfxName>> = { [PU_SODA]: 'fasait', [PU_PROTEIN]: 'flex', [PU_GHOST]: 'fantoma' };
 
 /** Renders the shared GameState and forwards local input; knows nothing about where the state comes from. */
 export class GameScene extends Phaser.Scene {
@@ -270,6 +275,13 @@ export class GameScene extends Phaser.Scene {
         if (e.playerId === meId) vibrate(70);
       } else if (e.type === 'spring') {
         playSfx('boing', e.playerId === meId ? 1 : 0.7);
+      } else if (e.type === 'effectEnd') {
+        if (e.kind === PU_SODA) {
+          this.shout(e.playerId, 'RÂÂÂG!', '#7af0bf');
+          playSfx('ragait', e.playerId === meId ? 1 : 0.5);
+        } else if (e.kind === PU_GHOST) {
+          this.shout(e.playerId, 'BU!', '#d8e2ff');
+        }
       } else if (e.type === 'roundStart') {
         for (const car of this.cars.values()) car.reset();
       } else if (e.type === 'roundEnd') {
@@ -288,7 +300,7 @@ export class GameScene extends Phaser.Scene {
     this.shout(playerId, info.shout, hexColor(info.color));
     const pos = this.screenPos(playerId);
     if (pos) powerupSparkle(this, pos.x, pos.y, info.color);
-    playSfx('ridicare', mine ? 1 : 0.5);
+    playSfx(PICKUP_SFX[kind] ?? 'ridicare', mine ? 1 : 0.5);
     if (mine) vibrate(30);
   }
 

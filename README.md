@@ -29,7 +29,8 @@ Intro → porecla → meniu: „Creează joc”, „Intră la un prieten” (cod
 În lobby hostul alege 3/5/7 runde, power-up-uri da/nu și boții (până la 6 mașinuțe, fiecare bot cu nivelul lui), apoi Start.
 La final: podiumul (primii trei urcă pe trepte, artificii pentru câștigător), clasamentul meciului și premiile:
 Bătăușul (cei mai mulți scoși din ring), Kamikaze (cele mai multe ieșiri singur), Neclintitul (cele mai puține
-ieșiri), Ciocănarul (cele mai multe lovituri), Colecționarul (cele mai multe power-up-uri). Apoi hostul îi duce
+ieșiri), Ciocănarul (cele mai multe lovituri), Colecționarul (cele mai multe power-up-uri), Uriașul (cei mai
+mulți scoși din ring cât era mare de la Pudra proteică). Apoi hostul îi duce
 pe toți înapoi în lobby.
 
 Online: „Creează joc” dă un cod de 6 caractere și un link de invitație (`?room=COD`, „Trimite invitația” pe telefon,
@@ -57,9 +58,13 @@ odată: unul nou îl înlocuiește pe cel vechi (Claxonul și Uleiul sunt instan
 | Ulei vărsat | o baltă în urma ta, 8 s: pe ea mașinile (nu și tu) alunecă; cine iese de pe ea îți dă +1 (în 3 s) |
 | Țuică de prună | primul pe care îl lovești are virajul inversat 4 s (apare un „?” deasupra lui); ține până lovești sau 8 s |
 | Bară cu arcuri | 5 s: loviturile tale îi împing pe ceilalți de 2× mai tare |
+| Suc Zero Zahăr | 5 s: viteză maximă ×1,6 și accelerație ×1,5, dar aderență mai mică: poți ieși singur din ring; dâră de bule |
+| Pudră proteică | 6 s: crești treptat (~0,3 s) la ~1,7× rază (cam cât 3 mașini) și masă ×3, puțin mai lent la accelerație; apoi revii treptat. Ieși tot după centrul mașinii |
+| Fantomă | 5 s: invizibil pentru ceilalți (doar o sclipire slabă la ~1 s) și de neatins: treci prin mașini, Claxonul nu te mișcă, boții nu te văd; uleiul te prinde și poți ieși singur. Pâlpâie în ultima secundă; dacă reapari peste cineva, vă despărțiți lin, fără +1 |
 
 Boții merg după ele când sunt aproape și nu e periculos (Greu alege mai bine, Ușor le ignoră des) și știu să le
-folosească: cu Mici, Arcuri sau Țuică atacă, cu Colacul se apropie mai curajos de margine.
+folosească: cu Mici, Arcuri, Țuică sau mari de la Proteină atacă, cu Colacul se apropie mai curajos de margine.
+Greu țintește cu Sucul rivalii de lângă margine și fuge de uriași; Ușor e luat prin surprindere de viteza Sucului.
 Duratele și puterile se reglează din `?tune` (doar local). Fără power-up-uri, simularea e exact cea dinainte.
 
 ## Sunete și muzică înlocuibile
@@ -83,6 +88,10 @@ Efectele și muzica sunt generate cu Web Audio. Oricare poate fi înlocuit punâ
 | `sughit.ogg` | Țuică: cineva rămâne cu virajul inversat |
 | `boing.ogg` | o lovitură cu Bară cu arcuri |
 | `colac.ogg` | Colacul de salvare salvează o mașină |
+| `fasait.ogg` | e luat Sucul Zero Zahăr |
+| `ragait.ogg` | se termină Sucul Zero Zahăr |
+| `flex.ogg` | e luată Pudra proteică |
+| `fantoma.ogg` | e luată Fantoma |
 
 Butonul de sunet le oprește pe toate, muzica inclusiv.
 
