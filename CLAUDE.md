@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-"Mașinuțe de Bâlci" — browser multiplayer top-down bumper-car arena, Romanian night-fair theme. npm workspaces monorepo: `shared/` (pure deterministic simulation), `client/` (Phaser 3 + Vite), `server/` (authoritative Colyseus 0.18). README and user-facing strings are in Romanian; code comments are in English. Requires Node ≥ 22.12. Architecture and UX patterns come from the sister project "Bombe și Petarde" (`E:\learn\petarde-bombe`): read it for reference, never modify it.
+"Mașinuțe de Bâlci" — browser multiplayer top-down bumper-car arena, Romanian night-fair theme. npm workspaces monorepo: `shared/` (pure deterministic simulation), `client/` (Phaser 3 + Vite), `server/` (authoritative Colyseus 0.18). README and user-facing strings are in Romanian; code comments are in English. Requires Node ≥ 22.12. Architecture and UX patterns come from the sister project "Bombe și Petarde" (`C:\Users\silvi\petarde`): read it for reference, never modify it.
 
 ## Commands
 
