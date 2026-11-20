@@ -19,14 +19,18 @@ Nivelurile boților: `usor`, `mediu`, `greu` (2–6 boți). `--seed` schimbă me
 ## Controale
 
 - Tastatură: săgeți sau WASD (stânga/dreapta = viraj, sus = accelerație, jos = frână și marșarier), Spațiu = boost, P = pauză, Esc = ieși, F = ecran complet.
-- Sus în dreapta: sunet pornit/oprit și ecran complet.
+- Sus în dreapta: sunet pornit/oprit și ecran complet. Muzica de bâlci se oprește separat: „Muzică” din „Setări”
+  (telefon) sau din colțul meniului (calculator).
 - Telefon (pe orizontală): joystick în stânga (mașina virează spre direcția lui și accelerează cât îl împingi), buton de boost în dreapta. Din „Setări”: mod stângaci, vibrații, efecte reduse.
 
 ## Cum se joacă
 
 Intro → porecla → meniu: „Creează joc”, „Intră la un prieten” (cod de 6 caractere) sau „Joacă offline cu boți”.
 În lobby hostul alege 3/5/7 runde, power-up-uri da/nu și boții (până la 6 mașinuțe, fiecare bot cu nivelul lui), apoi Start.
-După meci, hostul îi duce pe toți înapoi în lobby.
+La final: podiumul (primii trei urcă pe trepte, artificii pentru câștigător), clasamentul meciului și premiile:
+Bătăușul (cei mai mulți scoși din ring), Kamikaze (cele mai multe ieșiri singur), Neclintitul (cele mai puține
+ieșiri), Ciocănarul (cele mai multe lovituri), Colecționarul (cele mai multe power-up-uri). Apoi hostul îi duce
+pe toți înapoi în lobby.
 
 Online: „Creează joc” dă un cod de 6 caractere și un link de invitație (`?room=COD`, „Trimite invitația” pe telefon,
 „Copiază link” pe calculator). Cine pierde conexiunea are 15 secunde să revină; reîncărcarea paginii în acest
@@ -58,20 +62,29 @@ Boții merg după ele când sunt aproape și nu e periculos (Greu alege mai bine
 folosească: cu Mici, Arcuri sau Țuică atacă, cu Colacul se apropie mai curajos de margine.
 Duratele și puterile se reglează din `?tune` (doar local). Fără power-up-uri, simularea e exact cea dinainte.
 
-## Sunete înlocuibile
+## Sunete și muzică înlocuibile
 
-Efectele sunt generate cu Web Audio. Oricare poate fi înlocuit punând un fișier cu numele lui în
+Efectele și muzica sunt generate cu Web Audio. Oricare poate fi înlocuit punând un fișier cu numele lui în
 `client/public/audio/` (`.ogg`, sau `.mp3` dacă nu există `.ogg`); un fișier lipsă înseamnă sunetul generat.
 
 | Fișier | Când se aude |
 |---|---|
+| `muzica.ogg` | muzica de bâlci, în buclă, încet (generată: un vals de orgă de carusel) |
+| `bonk.ogg` | două mașini se lovesc (mai tare la o lovitură mai puternică) |
+| `boost.ogg` | boost |
+| `iesire.ogg` | o mașină iese din ring |
+| `numaratoare.ogg` | 3, 2, 1 la începutul rundei |
+| `start.ogg` | START! |
+| `ring.ogg` | ringul începe să se strângă |
+| `runda.ogg` | cineva câștigă o rundă |
+| `final.ogg` | podiumul de la finalul meciului (fanfară) |
 | `claxon.ogg` | Claxon de TIR |
 | `ridicare.ogg` | e luat un power-up |
 | `sughit.ogg` | Țuică: cineva rămâne cu virajul inversat |
 | `boing.ogg` | o lovitură cu Bară cu arcuri |
 | `colac.ogg` | Colacul de salvare salvează o mașină |
 
-Butonul de sunet le oprește pe toate.
+Butonul de sunet le oprește pe toate, muzica inclusiv.
 
 ## Opțiuni de test în URL
 

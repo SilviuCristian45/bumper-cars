@@ -53,6 +53,7 @@ export interface PlayerState {
   outs: number; // eliminated, any reason
   points: number;
   bumps: number; // hits dealt, statistics only
+  pickups: number; // power-ups picked up this match, statistics only
   // Power-ups (all 0 when they are off)
   effect: number; // active effect (PU_MICI, PU_LIFEBUOY, PU_TUICA, PU_SPRINGS) or PU_NONE
   effectTicks: number; // ticks left of it

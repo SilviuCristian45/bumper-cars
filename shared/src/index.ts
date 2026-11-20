@@ -9,6 +9,7 @@ export * from './match';
 export * from './tuning';
 export * from './physics';
 export * from './powerups';
+export * from './awards';
 export * from './sim';
 export * from './bot';
 export * from './runner';

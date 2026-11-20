@@ -61,6 +61,7 @@ export const PLAYER_STATE_KEYS = [
   'outs',
   'points',
   'bumps',
+  'pickups',
   'effect',
   'effectTicks',
   'confusedTicks',

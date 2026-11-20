@@ -382,11 +382,13 @@
   gap: 10px;
 }
 
-/* Desktop: the effects toggle sits in the bottom-left corner. */
+/* Desktop: the music and effects toggles sit in the bottom-left corner. */
 .corner-toggle {
   position: fixed;
   left: calc(var(--sal) + 16px);
   bottom: calc(var(--sab) + 16px);
+  display: flex;
+  gap: 8px;
 }
 
 @media (max-width: 760px) {

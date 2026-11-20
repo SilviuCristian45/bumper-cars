@@ -42,5 +42,9 @@ export const DEPTH = {
   lights: 8,
   debug: 20,
   hud: 30,
+  /** The end-of-match podium covers the HUD... */
+  podium: 34,
+  /** ...but not the leave button. */
+  leave: 35,
   overlay: 40,
 } as const;

@@ -74,20 +74,22 @@ export class MenuScene extends Phaser.Scene {
     else if (!isTouch && onlineEnabled) this.codeInput.focus();
   }
 
-  /** Desktop: the "Efecte reduse" toggle in the corner (touch devices have it under "Setări"). */
+  /** Desktop: the "Muzică" and "Efecte reduse" toggles in the corner (touch devices have them under "Setări"). */
   private effectsToggle(): HTMLElement {
-    const label = () => `Efecte reduse: ${getSetting('reducedEffects') ? 'da' : 'nu'}`;
-    const toggle = button(
-      label(),
-      () => {
-        setSetting('reducedEffects', !getSetting('reducedEffects'));
-        toggle.textContent = label();
-      },
-      'secondary',
-      'small',
-    );
-    toggle.classList.add('corner-toggle');
-    return toggle;
+    const toggle = (key: 'music' | 'reducedEffects', name: string) => {
+      const label = () => `${name}: ${getSetting(key) ? 'da' : 'nu'}`;
+      const node = button(
+        label(),
+        () => {
+          setSetting(key, !getSetting(key));
+          node.textContent = label();
+        },
+        'secondary',
+        'small',
+      );
+      return node;
+    };
+    return el('div', { class: 'corner-toggle' }, [toggle('music', 'Muzică'), toggle('reducedEffects', 'Efecte reduse')]);
   }
 
   private resume(): void {

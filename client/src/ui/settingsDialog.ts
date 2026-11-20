@@ -3,7 +3,7 @@ import { getSetting, setSetting, type SettingKey } from '../settings';
 import { button, el } from './dom';
 import { openDialog } from './dialog';
 
-// "Setări": effects and the touch controls, remembered on this device.
+// "Setări": music, effects and the touch controls, remembered on this device.
 
 const canVibrate = typeof navigator.vibrate === 'function';
 
@@ -25,7 +25,7 @@ function toggle(key: SettingKey, label: string): HTMLButtonElement {
 }
 
 export function openSettings(): void {
-  const items = [toggle('reducedEffects', 'Efecte reduse')];
+  const items = [toggle('music', 'Muzică'), toggle('reducedEffects', 'Efecte reduse')];
   if (isTouch) {
     items.push(toggle('leftHanded', 'Mod stângaci (boost în stânga)'));
     if (canVibrate) items.push(toggle('vibration', 'Vibrații'));

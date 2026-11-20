@@ -184,6 +184,7 @@ function spawn(state: GameState, players: PlayerState[], events: GameEvent[]): b
 /** Takes effect at once. Lasting effects replace the car's current one; horn and oil are instant. */
 function pickUp(state: GameState, p: PlayerState, kind: number, players: PlayerState[], events: GameEvent[]): void {
   events.push({ type: 'pickup', playerId: p.id, kind });
+  p.pickups++;
   if (kind === PU_HORN) {
     honk(state, p, players, events);
   } else if (kind === PU_OIL) {

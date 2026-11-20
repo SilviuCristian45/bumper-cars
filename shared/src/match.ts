@@ -102,6 +102,7 @@ export function addPlayer(state: GameState, id: string, name: string, isBot = fa
     outs: 0,
     points: 0,
     bumps: 0,
+    pickups: 0,
     effect: 0,
     effectTicks: 0,
     confusedTicks: 0,
@@ -229,6 +230,7 @@ export function startMatch(state: GameState, byId: string): boolean {
     p.outs = 0;
     p.points = 0;
     p.bumps = 0;
+    p.pickups = 0;
   }
   state.round = 1;
   startRound(state);

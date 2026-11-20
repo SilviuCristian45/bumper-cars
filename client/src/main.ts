@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import './style.css';
 import './screens.css';
 import { DEFAULT_ROUNDS, isValidRoomCode, MAX_PLAYERS, normalizeRoomCode, ROUND_OPTIONS } from '@masinute/shared';
+import { initMusic } from './audio/music';
 import { initSfx } from './audio/sfx';
 import { initMute } from './audio/sound';
 import { parseBotLevel } from './botLevels';
@@ -82,6 +83,7 @@ const game = new Phaser.Game({
 });
 initMute(game);
 initSfx(game);
+initMusic(game);
 // HTML layers over the canvas: the sound and fullscreen icons and the rotate prompt (toasts and dialogs come and go).
 initChrome(game);
 initRotatePrompt();

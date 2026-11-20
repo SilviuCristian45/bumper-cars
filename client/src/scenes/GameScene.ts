@@ -9,7 +9,6 @@ import {
   TICK_RATE,
   TUNING,
   applyGameTuning,
-  computeStandings,
   countdownSeconds,
   fightTicks,
   type GameEvent,
@@ -41,6 +40,7 @@ import { button, el, useScaleMode } from '../ui/dom';
 import { fullscreenOnFirstTap } from '../ui/fullscreen';
 import { requireLandscape } from '../ui/orientation';
 import { notifyPresence } from '../ui/presence';
+import { Podium } from '../ui/Podium';
 import { TextButton } from '../ui/TextButton';
 import type { LobbySceneData } from './LobbyScene';
 import type { MenuSceneData } from './MenuScene';
@@ -72,6 +72,7 @@ export class GameScene extends Phaser.Scene {
   private hud!: Hud;
   private connection!: ConnectionBanner;
   private pauseButton?: TextButton;
+  private podium?: Podium;
   private confirm?: Dialog;
   /** The leave dialog paused the offline match, so closing it resumes. */
   private confirmPaused = false;
@@ -101,6 +102,7 @@ export class GameScene extends Phaser.Scene {
     this.debug = undefined;
     this.tune = undefined;
     this.pauseButton = undefined;
+    this.podium = undefined;
     this.confirm = undefined;
     this.confirmPaused = false;
   }
@@ -158,6 +160,7 @@ export class GameScene extends Phaser.Scene {
       // Phaser keeps key captures game-wide: without this, WASD and Space could not be typed in the menus.
       this.input.keyboard!.clearCaptures();
       this.tune?.destroy();
+      this.podium?.destroy();
       for (const car of this.cars.values()) car.destroy();
       this.game.events.off(Phaser.Core.Events.HIDDEN, this.onHidden, this);
     });
@@ -194,6 +197,7 @@ export class GameScene extends Phaser.Scene {
     this.hud.update(state, this.transport.playerId);
     this.syncCountdown(state);
     this.syncOverlay(state);
+    this.syncPodium(state);
     this.debug?.update(state, this.transport.playerId, this.game.loop.actualFps, this.transport.isPaused(), (id) => this.screenPos(id), this.transport.netStats?.());
   }
 
@@ -229,15 +233,21 @@ export class GameScene extends Phaser.Scene {
       if (e.type === 'bump') {
         const strength = e.force / BUMP_EVENT_MIN;
         bumpSparks(this, toScreenX(e.x), toScreenY(e.y), strength);
-        if (e.a === meId || e.b === meId) {
+        const mine = e.a === meId || e.b === meId;
+        playSfx('bonk', Math.min(1, (mine ? 0.45 : 0.25) + 0.12 * strength));
+        if (mine) {
           if (!reducedEffects()) this.cameras.main.shake(120, Math.min(0.012, 0.002 * strength));
           vibrate(Math.min(60, 15 + 10 * strength));
         }
       } else if (e.type === 'boost') {
         const pos = this.screenPos(e.playerId);
         if (pos) boostPuff(this, pos.x, pos.y, pos.angle);
+        playSfx('boost', e.playerId === meId ? 0.8 : 0.3);
       } else if (e.type === 'out') {
         this.onOut(state, e.playerId, e.byId);
+        playSfx('iesire', e.playerId === meId ? 1 : 0.5);
+      } else if (e.type === 'shrinkStart') {
+        playSfx('ring');
       } else if (e.type === 'powerupSpawn') {
         powerupSparkle(this, toScreenX(e.x), toScreenY(e.y), POWERUP_INFO[e.kind]?.color ?? 0xffffff);
       } else if (e.type === 'pickup') {
@@ -262,8 +272,10 @@ export class GameScene extends Phaser.Scene {
         playSfx('boing', e.playerId === meId ? 1 : 0.7);
       } else if (e.type === 'roundStart') {
         for (const car of this.cars.values()) car.reset();
-      } else if (e.type === 'roundEnd' && e.winnerId === meId) {
-        vibrate(80);
+      } else if (e.type === 'roundEnd') {
+        // The match end has its own fanfare (the podium).
+        if (e.round < state.roundsTotal) playSfx('runda', e.winnerId === meId ? 1 : 0.45);
+        if (e.winnerId === meId) vibrate(80);
       }
     }
   }
@@ -357,6 +369,7 @@ export class GameScene extends Phaser.Scene {
     this.lastCountdown = key;
     this.countdown.setText(label).setColor(label === 'START!' ? '#7cf29a' : '#ffe066');
     if (label) {
+      playSfx(label === 'START!' ? 'start' : 'numaratoare');
       this.countdown.setScale(1.5).setAlpha(1);
       this.tweens.add({ targets: this.countdown, scale: 1, duration: 260, ease: 'Back.easeOut' });
     }
@@ -366,7 +379,8 @@ export class GameScene extends Phaser.Scene {
     const me = state.players[this.transport.playerId];
     const name = (id: string) => state.players[id]?.name ?? '?';
     let text = '';
-    if (state.phase === 'intermission' || state.phase === 'finished') {
+    // The end of the match has its own screen (syncPodium).
+    if (state.phase === 'intermission') {
       const result =
         state.roundOutcome === 'win'
           ? state.roundWinner === this.transport.playerId
@@ -375,21 +389,7 @@ export class GameScene extends Phaser.Scene {
           : state.roundOutcome === 'draw'
             ? 'Egal! Ultimii au ieșit deodată.'
             : 'Timpul a expirat! Nimeni nu ia +3.';
-      if (state.phase === 'intermission') {
-        text = `${result}\n\nRunda ${state.round + 1} începe în ${Math.ceil(state.phaseTimer / TICK_RATE)}...`;
-      } else {
-        const lines = computeStandings(state as GameState)
-          .slice(0, 6)
-          .map((id, i) => `${i + 1}. ${name(id)}  ${state.players[id]!.points} p`);
-        const tap = isTouch ? 'Atinge aici' : 'Enter';
-        const again = this.data_.newMatch
-          ? `\n\n${tap} = încă un meci`
-          : state.hostId === this.transport.playerId
-            ? `\n\n${tap} = înapoi în lobby`
-            : '\n\nAșteaptă ca hostul să revină în lobby.';
-        const records = this.recordLines();
-        text = `${result}\n\nGata meciul!\n${lines.join('\n')}${records ? `\n\n${records}` : ''}${again}`;
-      }
+      text = `${result}\n\nRunda ${state.round + 1} începe în ${Math.ceil(state.phaseTimer / TICK_RATE)}...`;
     } else if (this.transport.isPaused() && !this.confirm) {
       text = `Pauză\n\n${isTouch ? 'Revino în joc' : 'P = continuă'}`;
     }
@@ -401,21 +401,25 @@ export class GameScene extends Phaser.Scene {
     this.banner.setText(watching ? 'Ai ieșit din ring! Privești runda.' : '');
   }
 
-  /**
-   * Online: "Ai intrat în top! Locul X" / "Record nou! Locul X" for this player, then the others
-   * (shown once the server has saved the match). Offline: a note that it does not count.
-   */
-  private recordLines(): string {
-    if (!this.transport.online) return this.data_.newMatch ? '' : 'Meciurile offline nu intră în clasament.';
-    const me = this.transport.playerId;
-    return [...this.transport.newRecords()]
-      .sort((a, b) => Number(b.playerId === me) - Number(a.playerId === me) || a.place - b.place)
-      .map((r) =>
-        r.playerId === me
-          ? `${r.kind === 'top' ? 'Ai intrat în top!' : 'Record nou!'} Locul ${r.place} în clasament`
-          : `${r.name}: ${r.kind === 'top' ? 'a intrat în top' : 'record nou'}, locul ${r.place}`,
-      )
-      .join('\n');
+  /** The podium takes over the screen once the match is over (fanfare on arrival). */
+  private syncPodium(state: Readonly<GameState>): void {
+    if (state.phase !== 'finished') {
+      this.podium?.destroy();
+      this.podium = undefined;
+      return;
+    }
+    if (this.podium) {
+      this.podium.update(state, this.transport.newRecords());
+      return;
+    }
+    this.podium = new Podium(this, state, {
+      me: this.transport.playerId,
+      online: this.transport.online,
+      testMatch: !!this.data_.newMatch,
+      depth: DEPTH.podium,
+      onContinue: () => this.onContinue(),
+    });
+    playSfx('final');
   }
 
   private togglePause(): void {
@@ -458,12 +462,13 @@ export class GameScene extends Phaser.Scene {
    */
   private createButtons(leftHanded: boolean): void {
     if (!TOUCH_LAYOUT) {
-      new TextButton(this, HUD_X, GAME_H - 24, 'Ieși (Esc)', () => this.setConfirm(true), 'secondary', 16).setOrigin(0, 1).setDepth(DEPTH.hud);
+      // Above the podium too: leaving stays possible after the match.
+      new TextButton(this, HUD_X, GAME_H - 24, 'Ieși (Esc)', () => this.setConfirm(true), 'secondary', 16).setOrigin(0, 1).setDepth(DEPTH.leave);
       return;
     }
     const x = leftHanded ? HUD_X : GAME_W - SIDE_W + 16;
     const leave = new TextButton(this, x, 190, 'Ieși', () => this.setConfirm(true), 'secondary', 24).setOrigin(0, 0).setWidth(150, 14);
-    leave.setDepth(DEPTH.hud);
+    leave.setDepth(DEPTH.leave);
     if (this.transport.pausable) {
       this.pauseButton = new TextButton(this, x, 190 + leave.height + 14, 'Pauză', () => this.togglePause(), 'secondary', 24)
         .setOrigin(0, 0)

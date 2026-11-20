@@ -35,6 +35,7 @@ export const PlayerSchema = schema(
     outs: t.uint16(),
     points: t.int16(),
     bumps: t.uint16(),
+    pickups: t.uint16(),
     effect: t.uint8(),
     effectTicks: t.uint16(),
     confusedTicks: t.uint16(),

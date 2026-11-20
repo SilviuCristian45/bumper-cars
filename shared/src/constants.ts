@@ -139,14 +139,14 @@ export const POWERUP_RETRY_TICKS = 10;
 
 // Power-up strengths and durations: the defaults of the TUNING values (tuning.ts, ?tune).
 export const HORN_RADIUS = 6 * CAR_RADIUS; // ~3 cars
-export const HORN_PUSH = 2600; // speed given to a car right next to the horn, less further away
+export const HORN_PUSH = 3400; // speed given to a car right next to the horn, less further away
 export const MICI_TICKS = 6 * TICK_RATE;
 export const MICI_MASS_PCT = 200;
 export const MICI_SPEED_PCT = 85;
 export const LIFEBUOY_TICKS = 10 * TICK_RATE;
 export const LIFEBUOY_BOUNCE = 1400; // speed toward the center after the rescue
 export const OIL_TICKS = 8 * TICK_RATE;
-export const OIL_RADIUS = 46 * FP;
+export const OIL_RADIUS = 54 * FP;
 export const OIL_GRIP = 6; // sideways grip on the puddle (normal GRIP 130)
 export const TUICA_TICKS = 8 * TICK_RATE;
 export const TUICA_CONFUSE_TICKS = 4 * TICK_RATE;

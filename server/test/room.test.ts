@@ -307,7 +307,7 @@ describe('MasinuteRoom', () => {
     const g = game(room);
     Object.assign(g, { puTimer: 4, pu1Kind: PU_MICI, pu1X: -300 * FP, pu1Y: -40 * FP, pu1Ticks: 200 });
     const bot = Object.values(g.players).find((p) => p.isBot)!;
-    Object.assign(bot, { effect: PU_SPRINGS, effectTicks: 120, confusedTicks: 60, oilX: 5 * FP, oilY: -7 * FP, oilTicks: 90 });
+    Object.assign(bot, { effect: PU_SPRINGS, effectTicks: 120, confusedTicks: 60, oilX: 5 * FP, oilY: -7 * FP, oilTicks: 90, pickups: 3 });
 
     // What the server sent, tick by tick.
     const sent = new Map<number, GameState>();
@@ -332,7 +332,7 @@ describe('MasinuteRoom', () => {
     const first = Math.min(...sent.keys());
     for (const state of received.filter((r) => r.tick >= first)) expect(state).toEqual(sent.get(state.tick));
     expect(received.at(-1)!.players[client.sessionId]!.lastSeq).toBe(30);
-    expect(received.some((r) => r.pu0Kind !== 0 && r.pu1Kind === PU_MICI && r.players[bot.id]!.oilTicks > 0)).toBe(true);
+    expect(received.some((r) => r.pu0Kind !== 0 && r.pu1Kind === PU_MICI && r.players[bot.id]!.oilTicks > 0 && r.players[bot.id]!.pickups >= 3)).toBe(true);
   });
 
   it("sends a tick's events after its patch, tagged with the tick", async () => {

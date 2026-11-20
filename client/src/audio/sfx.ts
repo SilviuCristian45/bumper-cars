@@ -6,6 +6,14 @@ import { fetchFirst } from './sound';
 // Everything goes through Phaser's master gain, so the mute toggle applies.
 
 export const SFX_NAMES = [
+  'bonk', // two cars hit (louder for a harder hit)
+  'boost',
+  'iesire', // a car falls off the ring
+  'numaratoare', // 3, 2, 1
+  'start', // START!
+  'ring', // the ring starts shrinking
+  'runda', // someone wins a round
+  'final', // the podium
   'claxon', // Claxon de TIR
   'ridicare', // a power-up is picked up
   'sughit', // Țuică: someone's steering is turned around
@@ -14,12 +22,14 @@ export const SFX_NAMES = [
 ] as const;
 export type SfxName = (typeof SFX_NAMES)[number];
 
-/** The same effect more often than this plays once. */
+/** The same effect more often than this plays once (a pile-up of bumps is one bonk). */
 const MIN_GAP_MS = 45;
+const GAP_MS: Partial<Record<SfxName, number>> = { bonk: 70 };
 
 const files = new Map<SfxName, AudioBuffer>();
 const lastPlayed = new Map<SfxName, number>();
 let manager: Phaser.Sound.WebAudioSoundManager | null = null;
+let noiseBuffer: AudioBuffer | null = null;
 
 /** Looks for replacement files once, at boot; a missing file simply keeps the generated sound. */
 export function initSfx(game: Phaser.Game): void {
@@ -40,7 +50,7 @@ export function playSfx(name: SfxName, volume = 1): void {
   // Before the first click the context is suspended: sounds would all burst out at once later.
   if (ctx.state !== 'running') return;
   const now = performance.now();
-  if (now - (lastPlayed.get(name) ?? -Infinity) < MIN_GAP_MS) return;
+  if (now - (lastPlayed.get(name) ?? -Infinity) < (GAP_MS[name] ?? MIN_GAP_MS)) return;
   lastPlayed.set(name, now);
 
   const out = ctx.createGain();
@@ -60,6 +70,49 @@ export function playSfx(name: SfxName, volume = 1): void {
 type Synth = (ctx: AudioContext, out: AudioNode, t: number) => void;
 
 const SYNTH: Record<SfxName, Synth> = {
+  // Rubber on rubber: a short low thump with a muffled knock on top.
+  bonk: (ctx, out, t) => {
+    tone(ctx, out, t, { type: 'sine', from: 150, to: 55, dur: 0.16, vol: 0.55 });
+    noise(ctx, out, t, { dur: 0.07, vol: 0.25, filter: 'lowpass', from: 1200, to: 300 });
+  },
+  // A whoosh of air.
+  boost: (ctx, out, t) => {
+    noise(ctx, out, t, { dur: 0.35, vol: 0.22, filter: 'bandpass', from: 600, to: 2600 });
+    tone(ctx, out, t, { type: 'sawtooth', from: 110, to: 220, dur: 0.25, vol: 0.05 });
+  },
+  // Falling off the floor: a sliding whistle down.
+  iesire: (ctx, out, t) => tone(ctx, out, t, { type: 'triangle', from: 880, to: 140, dur: 0.55, vol: 0.22 }),
+  numaratoare: (ctx, out, t) => tone(ctx, out, t, { type: 'sine', from: 660, dur: 0.14, vol: 0.3 }),
+  start: (ctx, out, t) => {
+    tone(ctx, out, t, { type: 'square', from: 990, dur: 0.32, vol: 0.14 });
+    tone(ctx, out, t, { type: 'sine', from: 1320, dur: 0.32, vol: 0.18 });
+  },
+  // A fairground bell: the ring is closing in.
+  ring: (ctx, out, t) => {
+    for (const at of [0, 0.22]) {
+      tone(ctx, out, t + at, { type: 'sine', from: 1568, dur: 0.5, vol: 0.18 });
+      tone(ctx, out, t + at, { type: 'sine', from: 2350, dur: 0.3, vol: 0.06 });
+    }
+  },
+  runda: (ctx, out, t) => {
+    [523, 659, 784, 1047].forEach((f, i) => tone(ctx, out, t + i * 0.09, { type: 'triangle', from: f, dur: i === 3 ? 0.35 : 0.12, vol: 0.26 }));
+  },
+  // A short brass-ish fanfare for the podium: G G G C ... E G C'.
+  final: (ctx, out, t) => {
+    const notes: [number, number, number][] = [
+      [392, 0, 0.12],
+      [392, 0.14, 0.12],
+      [392, 0.28, 0.12],
+      [523, 0.42, 0.45],
+      [659, 0.92, 0.18],
+      [784, 1.12, 0.18],
+      [1047, 1.32, 0.8],
+    ];
+    for (const [f, at, dur] of notes) {
+      tone(ctx, out, t + at, { type: 'sawtooth', from: f, dur, vol: 0.09 });
+      tone(ctx, out, t + at, { type: 'triangle', from: f / 2, dur, vol: 0.16 });
+    }
+  },
   // A lorry's air horn: low, slightly out-of-tune brassy notes held for a moment.
   claxon: (ctx, out, t) => {
     const filter = ctx.createBiquadFilter();
@@ -127,4 +180,33 @@ function tone(ctx: AudioContext, out: AudioNode, t: number, o: ToneOptions): voi
   osc.connect(gain).connect(out);
   osc.start(t);
   osc.stop(t + o.dur + 0.02);
+}
+
+interface NoiseOptions {
+  dur: number;
+  vol: number;
+  filter: BiquadFilterType;
+  from: number;
+  to: number;
+}
+
+/** Filtered white noise (the buffer is made once). */
+function noise(ctx: AudioContext, out: AudioNode, t: number, o: NoiseOptions): void {
+  if (!noiseBuffer || noiseBuffer.sampleRate !== ctx.sampleRate) {
+    noiseBuffer = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+    const data = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+  }
+  const src = ctx.createBufferSource();
+  src.buffer = noiseBuffer;
+  const filter = ctx.createBiquadFilter();
+  filter.type = o.filter;
+  filter.frequency.setValueAtTime(o.from, t);
+  filter.frequency.exponentialRampToValueAtTime(o.to, t + o.dur);
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(o.vol, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + o.dur);
+  src.connect(filter).connect(gain).connect(out);
+  src.start(t);
+  src.stop(t + o.dur);
 }

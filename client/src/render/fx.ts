@@ -129,3 +129,20 @@ export function powerupSparkle(scene: Phaser.Scene, x: number, y: number, color:
     },
   });
 }
+
+/** One firework over the podium, in the winner's color, falling a little. */
+export function firework(scene: Phaser.Scene, x: number, y: number, color: number, depth: number, count = 40): void {
+  burst(scene, x, y, {
+    count,
+    lifespanMs: 1300,
+    depth,
+    config: {
+      speed: { min: 60, max: 220 },
+      lifespan: { min: 700, max: 1300 },
+      scale: { start: 1.1, end: 0 },
+      gravityY: 140,
+      tint: [color, color, color, 0xffffff],
+      blendMode: Phaser.BlendModes.ADD,
+    },
+  });
+}
