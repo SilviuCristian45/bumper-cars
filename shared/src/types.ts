@@ -61,6 +61,9 @@ export interface PlayerState {
   oilX: number; // this car's oil puddle (one at a time), live while oilTicks > 0
   oilY: number;
   oilTicks: number;
+  // Set by the server room, outside the simulation (which never reads it): a player with no input for
+  // IDLE_TICKS while a round is played (tab in the background, connection down). Others see "zzz".
+  idle: boolean;
 }
 
 export interface GameState {

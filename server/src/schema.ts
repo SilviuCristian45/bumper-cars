@@ -42,6 +42,7 @@ export const PlayerSchema = schema(
     oilX: t.int32(),
     oilY: t.int32(),
     oilTicks: t.uint16(),
+    idle: t.boolean(),
   },
   'Player',
 );

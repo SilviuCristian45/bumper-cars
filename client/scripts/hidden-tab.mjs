@@ -15,7 +15,7 @@
 // Needs the dev servers (npm run dev): client on http://localhost:5174, server on 2568.
 //   node client/scripts/hidden-tab.mjs [--mode tab|freeze] [--when start|round|intermission|podium] [--away <s>] [--chrome <path>]
 import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -242,9 +242,18 @@ try {
 
   // B's car as the server has it (A's newest server state, updated even while A's tab is hidden).
   const serverB = () =>
-    A.eval(`(() => { const s = window.__game.scene.getScene('game').transport.latest; const b = Object.values(s.players).find((p) => p.name === 'Ascuns'); return b && { x: b.x, y: b.y, alive: b.alive, connected: b.connected, phase: s.phase, roundTick: s.roundTick }; })()`);
+    A.eval(`(() => { const s = window.__game.scene.getScene('game').transport.latest; const b = Object.values(s.players).find((p) => p.name === 'Ascuns'); return b && { x: b.x, y: b.y, alive: b.alive, connected: b.connected, idle: b.idle, phase: s.phase, roundTick: s.roundTick }; })()`);
   const FP = 256; // sub-units per pixel
   const driving = (s) => s && s.phase === 'playing' && s.alive && s.roundTick > 95; // past the 3-2-1 countdown
+  // "zzz": away for more than 2 s of a round, the others see B as idle.
+  const away = await serverB();
+  if (args.shot) {
+    // --shot <file.png>: A's screen while B is away (the "zzz" over B's car).
+    await A.front();
+    const { data } = await call('Page.captureScreenshot', { format: 'png' }, A.sessionId);
+    writeFileSync(args.shot, Buffer.from(data, 'base64'));
+  }
+  if (away?.phase === 'playing' && away.roundTick > 3 * 30 + 2 * 30 + 15 && AWAY_S >= 3) ok(away.idle === true, `A sees B idle ("zzz") while B is away (idle=${away.idle})`);
 
   await show(B);
   const back = Date.now();
@@ -284,7 +293,10 @@ try {
   }
   ok(sceneMs >= 0 && sceneMs <= 1000, `B is in the game scene, HTML lobby gone, within 1 s (${sceneMs} ms)`);
   ok(connectedMs >= 0 && connectedMs <= 1000, `B is connected, and the server knows it, within 1 s (${connectedMs} ms)`);
-  if (from) ok(respondMs >= 0 && respondMs <= 1000, `the server moves B's car under B's keys within 1 s (${respondMs} ms)`);
+  if (from) {
+    ok(respondMs >= 0 && respondMs <= 1000, `the server moves B's car under B's keys within 1 s (${respondMs} ms)`);
+    ok((await serverB())?.idle === false, 'B is no longer idle once driving again');
+  }
   else report.push(`(no driving check: phase ${snap.phase}, B alive ${snap.me?.alive})`);
 } catch (err) {
   report.push(`FAIL ${err.message}`);

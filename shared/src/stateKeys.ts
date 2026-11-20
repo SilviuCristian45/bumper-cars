@@ -68,6 +68,7 @@ export const PLAYER_STATE_KEYS = [
   'oilX',
   'oilY',
   'oilTicks',
+  'idle',
 ] as const satisfies readonly (keyof PlayerState)[];
 
 /** The decoded schema as the Colyseus SDK hands it over: players in a MapSchema. */

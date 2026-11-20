@@ -73,12 +73,18 @@ export interface MatchResult {
 }
 
 /** The result of a finished match, or null if it does not count (fewer than two humans). */
-export function matchResult(state: Readonly<GameState>, endedAt: Date): MatchResult | null {
+export function matchResult(
+  state: Readonly<GameState>,
+  endedAt: Date,
+  /** "Played for real" (the room's activity rule); a tab left alone does not make a match count. */
+  playedForReal: (playerId: string) => boolean = () => true,
+): MatchResult | null {
   const all = Object.values(state.players);
   const humans = all.filter((p) => !p.isBot);
-  if (humans.length < LEADERBOARD_MIN_HUMANS) return null;
+  const active = humans.filter((p) => playedForReal(p.id));
+  if (active.length < LEADERBOARD_MIN_HUMANS) return null;
   const standings = computeStandings(state as GameState);
-  const players = humans
+  const players = active
     .filter((p) => !p.left)
     .map((p) => ({
       playerId: p.id,

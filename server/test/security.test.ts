@@ -3,9 +3,12 @@ import { createAuthContext } from '@colyseus/core';
 import { ColyseusTestServer } from '@colyseus/testing';
 import {
   CLOSE_LOBBY_IDLE,
+  COUNTDOWN_TICKS,
   ERR_FORBIDDEN_ORIGIN,
   ERR_RATE_LIMITED,
   ERR_TOO_MANY_ROOMS,
+  IDLE_TICKS,
+  LEADERBOARD_MIN_ACTIVE_PERCENT,
   ROOM_NAME,
 } from '@masinute/shared';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -311,6 +314,8 @@ describe('D1: one address cannot flood the leaderboard', () => {
     const room = colyseus.getRoomById<MasinuteRoom>(a.roomId);
     room['clientIps'].set(a.sessionId, ipA);
     room['clientIps'].set(b.sessionId, ipB);
+    // Both drove (the "played for real" rule is tested on its own below).
+    for (const id of [a.sessionId, b.sessionId]) room['activity'].set(id, { onRing: 100, driving: 100 });
     return room;
   }
 
@@ -354,6 +359,84 @@ describe('D1: one address cannot flood the leaderboard', () => {
     migrate(db);
     expect(db.prepare('SELECT name, name_key FROM results').get()).toEqual({ name: 'Ștefan', name_key: 'ștefan' });
     db.close();
+  });
+});
+
+describe('zzz and "played for real"', () => {
+  /** A started match with two humans; both clients' state views follow the room. */
+  async function started() {
+    const a = await colyseus.sdk.create(ROOM_NAME, { name: 'Ana' });
+    const b = await colyseus.sdk.joinById(a.roomId, { name: 'Ion' });
+    const room = colyseus.getRoomById<MasinuteRoom>(a.roomId);
+    a.send('start');
+    await room.waitForNextMessage();
+    await room.waitForNextTimestep();
+    return { a, b, room, g: room['game'] };
+  }
+
+  it('marks a player with no input for 2 s as idle, for everyone to see, and clears it when inputs come back', async () => {
+    const { a, b, room, g } = await started();
+    g.roundTick = COUNTDOWN_TICKS + 200; // well into the round
+    room['lastInputTick'].set(a.sessionId, g.tick); // Ana drives
+    room['lastInputTick'].set(b.sessionId, g.tick - IDLE_TICKS - 5); // Ion's tab went to the background
+    await room.waitForNextTimestep();
+    await until(() => (a.state as unknown as { players: Map<string, { idle: boolean }> }).players.get(b.sessionId)?.idle === true);
+    expect(g.players[a.sessionId]!.idle).toBe(false);
+    expect(g.players[b.sessionId]!.idle).toBe(true);
+
+    b.send('input', { seq: 1, steer: 0, throttle: 100, boost: false });
+    await room.waitForNextMessage();
+    await room.waitForNextTimestep();
+    expect(g.players[b.sessionId]!.idle).toBe(false);
+  });
+
+  it('never marks anyone idle in the lobby, between rounds or in a round\'s first two seconds, nor bots', async () => {
+    const { room, g, b } = await started();
+    g.roundTick = 1; // a round just began: earlier silence (between rounds) does not count
+    room['lastInputTick'].set(b.sessionId, 0);
+    room['trackActivity']();
+    expect(Object.values(g.players).some((p) => p.idle)).toBe(false);
+    g.phase = 'intermission';
+    room['trackActivity']();
+    expect(Object.values(g.players).some((p) => p.idle)).toBe(false);
+  });
+
+  it('counts how much each human drove while on the ring, after the countdown', async () => {
+    const { room, g, a, b } = await started();
+    g.roundTick = COUNTDOWN_TICKS + 1;
+    const ana = g.players[a.sessionId]!;
+    const ion = g.players[b.sessionId]!;
+    ana.alive = ion.alive = true;
+    ana.throttle = 100; // driving
+    ion.steer = ion.throttle = 0; // only neutral inputs (a second tab, or a client that sends nothing useful)
+    for (let i = 0; i < 10; i++) {
+      room['lastInputTick'].set(a.sessionId, g.tick);
+      room['lastInputTick'].set(b.sessionId, g.tick);
+      room['trackActivity']();
+    }
+    expect(room['activity'].get(a.sessionId)).toEqual({ onRing: 10, driving: 10 });
+    expect(room['activity'].get(b.sessionId)).toEqual({ onRing: 10, driving: 0 });
+    expect(room.playedForReal(a.sessionId)).toBe(true);
+    expect(room.playedForReal(b.sessionId)).toBe(false);
+  });
+
+  it(`needs ${LEADERBOARD_MIN_ACTIVE_PERCENT}% driving to count, and a match needs two humans who played for real`, async () => {
+    const board = openLeaderboard(':memory:')!;
+    useLeaderboard(board);
+    try {
+      const { room, a, b } = await started();
+      const activity = room['activity'];
+      activity.set(a.sessionId, { onRing: 100, driving: 90 });
+      activity.set(b.sessionId, { onRing: 100, driving: LEADERBOARD_MIN_ACTIVE_PERCENT - 1 }); // the tab left alone, mostly
+      room['saveMatch']();
+      expect(board.top()).toEqual([]); // before: two humans in the room were enough
+      activity.set(b.sessionId, { onRing: 100, driving: LEADERBOARD_MIN_ACTIVE_PERCENT });
+      room['saveMatch']();
+      expect(board.top().map((e) => e.name).sort()).toEqual(['Ana', 'Ion']);
+    } finally {
+      useLeaderboard(null);
+      board.close();
+    }
   });
 });
 

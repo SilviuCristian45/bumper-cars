@@ -1,3 +1,4 @@
+import { TICK_RATE } from './constants';
 import type { GameEvent } from './types';
 
 // Wire contract between the Colyseus room (/server) and ColyseusTransport (/client).
@@ -70,6 +71,14 @@ export interface MatchRecords {
 export const LEADERBOARD_SIZE = 15;
 /** Only online matches with at least this many human players count. */
 export const LEADERBOARD_MIN_HUMANS = 2;
+/** No input from a player for this long while a round is played: idle ("zzz" over the car). */
+export const IDLE_TICKS = 2 * TICK_RATE;
+/**
+ * "Played for real": a human counts for the leaderboard only if, of the ticks their car was on the
+ * ring after the countdown, they were not idle and held some steer or throttle in at least this many
+ * percent (a second tab left alone, or a client that only sends neutral inputs, does not count).
+ */
+export const LEADERBOARD_MIN_ACTIVE_PERCENT = 30;
 
 /** One row of GET /leaderboard: a nickname's best match, plus how many matches that nickname played. */
 export interface LeaderboardEntry {

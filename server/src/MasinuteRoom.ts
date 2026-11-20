@@ -5,13 +5,16 @@ import {
   addPlayer,
   backToLobby,
   CLOSE_LOBBY_IDLE,
+  COUNTDOWN_TICKS,
   createGameState,
   ERR_IN_PROGRESS,
   ERR_ROOM_FULL,
   ERR_SERVER_FULL,
   ERR_TOO_MANY_ROOMS,
   generateRoomCode,
+  IDLE_TICKS,
   InputQueue,
+  LEADERBOARD_MIN_ACTIVE_PERCENT,
   leavePlayer,
   MAX_PLAYERS,
   MSG_EVENTS,
@@ -78,6 +81,10 @@ export class MasinuteRoom extends Room<{ state: RoomState }> {
   private lobbyTimer: Delayed | undefined;
   /** Each player's limit key ('' outside Caddy), for the leaderboard quota. */
   private readonly clientIps = new Map<string, string>();
+  /** The tick each player's last input arrived on (for idle). */
+  private readonly lastInputTick = new Map<string, number>();
+  /** Per human, this match: ticks on the ring after the countdown, and of those the ones they were driving. */
+  private readonly activity = new Map<string, { onRing: number; driving: number }>();
 
   /**
    * Runs for every create/join request, before the room exists for a create. Only stamps the options
@@ -113,7 +120,9 @@ export class MasinuteRoom extends Room<{ state: RoomState }> {
       if (this.game.phase !== 'playing') return;
       const input = parseInput(msg);
       // The player id always comes from the connection, never from the message.
-      if (input) this.inputQueue.push(client.sessionId, input);
+      if (!input) return;
+      this.inputQueue.push(client.sessionId, input);
+      this.lastInputTick.set(client.sessionId, this.game.tick);
     });
     this.onMessage('ping', (client, msg: { t?: unknown }) => {
       if (typeof msg?.t === 'number' && Number.isFinite(msg.t)) client.send(MSG_PONG, { t: msg.t } satisfies Pong);
@@ -142,6 +151,7 @@ export class MasinuteRoom extends Room<{ state: RoomState }> {
     this.onMessage('start', async (client) => {
       if (!startMatch(this.game, client.sessionId)) return;
       this.lobbyTimer?.clear();
+      this.activity.clear();
       await this.lock();
     });
     this.onMessage('lobby', async (client) => {
@@ -222,6 +232,7 @@ export class MasinuteRoom extends Room<{ state: RoomState }> {
     // Inputs only count while a round is being played; nothing moves in the lobby.
     if (this.game.phase !== 'playing') this.inputQueue.clear();
     if (this.game.phase !== 'lobby') events.push(...runTick(this.game, this.inputQueue.take()));
+    this.trackActivity();
     mirror(this.game, this.state);
     // The patch first: clients hold a tick's events until their state has reached it.
     this.broadcastPatch();
@@ -230,11 +241,38 @@ export class MasinuteRoom extends Room<{ state: RoomState }> {
     if (events.some((e) => e.type === 'matchEnd')) this.saveMatch();
   }
 
+  /**
+   * Who is idle (no input for IDLE_TICKS while a round is played: a hidden tab, a dropped connection)
+   * and how much each human really drove, for the leaderboard's "played for real" rule. Room-side
+   * bookkeeping: the simulation never reads PlayerState.idle.
+   */
+  private trackActivity(): void {
+    const game = this.game;
+    const playing = game.phase === 'playing';
+    // Counted from the round's start at the latest, so nobody shows idle in a round's first two seconds.
+    const roundStart = game.tick - game.roundTick;
+    for (const p of Object.values(game.players)) {
+      const idle = playing && !p.isBot && !p.left && game.tick - Math.max(this.lastInputTick.get(p.id) ?? 0, roundStart) > IDLE_TICKS;
+      p.idle = idle;
+      if (!playing || p.isBot || !p.alive || game.roundTick <= COUNTDOWN_TICKS) continue;
+      let a = this.activity.get(p.id);
+      if (!a) this.activity.set(p.id, (a = { onRing: 0, driving: 0 }));
+      a.onRing++;
+      if (!idle && (p.steer !== 0 || p.throttle !== 0)) a.driving++;
+    }
+  }
+
+  /** Whether a human played for real this match (LEADERBOARD_MIN_ACTIVE_PERCENT of their time on the ring). */
+  playedForReal(playerId: string): boolean {
+    const a = this.activity.get(playerId);
+    return !!a && a.onRing > 0 && a.driving * 100 >= a.onRing * LEADERBOARD_MIN_ACTIVE_PERCENT;
+  }
+
   /** Writes the finished match to the all-time leaderboard. A database error is only logged. */
   private saveMatch(): void {
     const board = currentLeaderboard();
     const now = new Date();
-    const result = matchResult(this.game, now);
+    const result = matchResult(this.game, now, (id) => this.playedForReal(id));
     if (!board || !result) return;
     // One address saves at most LEADERBOARD_MATCHES_PER_IP_PER_DAY matches a day (one person with
     // several tabs); players from an address past it are left out of this save, the others still count.

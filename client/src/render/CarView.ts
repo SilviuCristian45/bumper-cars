@@ -23,9 +23,15 @@ export class CarView {
   private readonly ring?: Phaser.GameObjects.Graphics;
   private readonly aura: Phaser.GameObjects.Graphics;
   private readonly dizzy: Phaser.GameObjects.Text;
+  /** Over another player's car while they send no input (tab in the background, connection down). */
+  private readonly sleepy: Phaser.GameObjects.Text;
   private out = false;
 
-  constructor(private readonly scene: Phaser.Scene, p: Readonly<PlayerState>, local: boolean) {
+  constructor(
+    private readonly scene: Phaser.Scene,
+    p: Readonly<PlayerState>,
+    private readonly local: boolean,
+  ) {
     const color = PLAYER_COLORS[p.slot]!;
     this.shadow = scene.add.image(0, 0, TEX.shadow).setDepth(DEPTH.shadow).setScale(1.1);
     this.body = scene.add.image(0, 0, TEX.car(p.slot)).setDepth(DEPTH.car);
@@ -53,6 +59,11 @@ export class CarView {
       .setOrigin(0.5)
       .setDepth(DEPTH.labels)
       .setVisible(false);
+    this.sleepy = scene.add
+      .text(0, 0, 'zzz', { fontFamily: FONT, fontSize: '18px', fontStyle: 'bold', color: '#bde0fe', stroke: '#120a24', strokeThickness: 4 })
+      .setOrigin(0, 1)
+      .setDepth(DEPTH.labels)
+      .setVisible(false);
   }
 
   /** Places the car at screen pixels with the heading in radians; `p` gives boost and cooldown. */
@@ -69,6 +80,7 @@ export class CarView {
     this.label.setPosition(x, y - CAR_R - 6);
     if (this.ring) this.drawRing(x, y, p);
     this.drawAura(x, y, p, time);
+    this.drawSleepy(x, y, p, time);
     const dizzy = p.confusedTicks > 0;
     this.dizzy.setVisible(dizzy);
     if (dizzy) {
@@ -88,6 +100,7 @@ export class CarView {
     this.ring?.clear();
     this.aura.clear();
     this.dizzy.setVisible(false);
+    this.sleepy.setVisible(false);
     this.scene.tweens.add({
       targets: [this.body, this.shadow, this.antenna],
       scale: 0.25,
@@ -121,7 +134,23 @@ export class CarView {
   }
 
   private parts(): (Phaser.GameObjects.Image | Phaser.GameObjects.Text | Phaser.GameObjects.Graphics)[] {
-    return [this.shadow, this.body, this.antenna, this.label, this.aura, this.dizzy, ...(this.ring ? [this.ring] : [])];
+    return [this.shadow, this.body, this.antenna, this.label, this.aura, this.dizzy, this.sleepy, ...(this.ring ? [this.ring] : [])];
+  }
+
+  /** "z", "zz", "zzz" drifting up next to the name tag (a steady "zzz" with reduced effects). */
+  private drawSleepy(x: number, y: number, p: Readonly<PlayerState>, time: number): void {
+    const show = p.idle && !this.local;
+    this.sleepy.setVisible(show);
+    if (!show) return;
+    if (reducedEffects()) {
+      this.sleepy.setText('zzz').setPosition(x + CAR_R, y - CAR_R - 18).setAlpha(1);
+      return;
+    }
+    const phase = (time / 1500) % 1;
+    this.sleepy
+      .setText('z'.repeat(1 + Math.floor(phase * 3)))
+      .setPosition(x + CAR_R, y - CAR_R - 14 - phase * 10)
+      .setAlpha(1 - phase * 0.5);
   }
 
   /** While an effect lasts: a soft colored disc under the car and an arc that shrinks with the time left. */

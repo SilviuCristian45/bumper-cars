@@ -143,6 +143,7 @@ export function addPlayer(state: GameState, id: string, name: string, isBot = fa
     oilX: 0,
     oilY: 0,
     oilTicks: 0,
+    idle: false,
   };
   state.players[id] = player;
   if (!state.hostId && !isBot) state.hostId = id;

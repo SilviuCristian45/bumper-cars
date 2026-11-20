@@ -47,12 +47,12 @@ Commit-uri `6fafdb7` (M3, C1, M2, D4), `3fa8153` (M1), `44f3174` (D2, m1), `d25e
 | M1 | reparat | `setPrivate(true)` + doar `create`/`joinById`/`reconnect` expuse |
 | D2 | reparat | fiecare adresă are 20 de coduri inexistente, apoi 4/min (join, reconnect, `/rooms/:code`); după epuizare **nici codurile reale nu primesc răspuns**, deci nu se poate distinge o nimereală. 5 greșeli de tastare la rând încă merg |
 | m1 | reparat | coduri din `crypto.randomInt`, seed din `crypto.randomBytes` |
-| D1 | parțial (cum s-a cerut) | porecle normalizate (NFC, ș/ț cu virgulă, majuscule în `nameKey`, fără caractere invizibile/de control, zalgo maxim 2 semne); migrația 2 unește rândurile vechi cu ş/ţ; maxim 30 de **meciuri** salvate per adresă pe zi UTC (jucătorii de la o adresă peste limită sunt lăsați afară din salvare, ceilalți intră). Fără proprietate a poreclei |
+| D1 | reparat (fără proprietatea poreclei) | porecle normalizate (NFC, ș/ț cu virgulă, majuscule în `nameKey`, fără caractere invizibile/de control, zalgo maxim 2 semne); migrația 2 unește rândurile vechi cu ş/ţ; maxim 30 de **meciuri** salvate per adresă pe zi UTC (jucătorii de la o adresă peste limită sunt lăsați afară din salvare, ceilalți intră). Fără proprietate a poreclei |
 | m2 | reparat | vezi D1; plus nume deja luat în cameră → „Ana 2” |
 | m4 | reparat | porecla brută e tăiată înainte de procesare; `onAuth` refuză opțiuni care nu sunt obiect |
-| D3 | pregătit, neaplicat | header-e în `deploy/Caddyfile`: HSTS, nosniff, Referrer-Policy, X-Frame-Options, Permissions-Policy, **CSP Report-Only** cu `report-uri /colyseus/csp-report` (serverul scrie încălcările în jurnal) |
-| m3 | pregătit, neaplicat | Caddy răspunde 404 la `/colyseus/health`, `/colyseus/__healthcheck`, `/colyseus/` (versiunea Colyseus); `push.ps1` verifică acum `/colyseus/leaderboard` |
-| m5 | pregătit, neaplicat | `deploy/masinute.service`: rețea doar loopback (`IPAddressDeny=any`/`IPAddressAllow=localhost`), fără capabilități, `ProtectProc`, `SystemCallFilter=@system-service` (EPERM, nu kill), `UMask=0077` etc. |
+| D3 | aplicat (CSP încă Report-Only) | header-e în `deploy/Caddyfile`: HSTS, nosniff, Referrer-Policy, X-Frame-Options, Permissions-Policy, **CSP Report-Only** cu `report-uri /colyseus/csp-report` (serverul scrie încălcările în jurnal) |
+| m3 | aplicat | Caddy răspunde 404 la `/colyseus/health`, `/colyseus/__healthcheck`, `/colyseus/` (versiunea Colyseus); `push.ps1` verifică acum `/colyseus/leaderboard` |
+| m5 | aplicat (scor 1.5 OK) | `deploy/masinute.service`: rețea doar loopback (`IPAddressDeny=any`/`IPAddressAllow=localhost`), fără capabilități, `ProtectProc`, `SystemCallFilter=@system-service` (EPERM, nu kill), `UMask=0077` etc. |
 
 **Atac înainte / după, verificat local** (același script, trimis „ca prin Caddy”, contra codului de la
 `4b6456a` pe portul 2571 și contra codului nou pe 2570):
@@ -72,15 +72,16 @@ Creează (online) → lobby → +Bot → Start → joc; meci offline cu boți ș
 telefon emulat (844×390, touch, `?touch`): **0 încălcări, 0 excepții**. Control negativ: o imagine de pe alt
 domeniu a fost blocată și raportul a ajuns în jurnalul serverului prin `/colyseus/csp-report`.
 
+**Aplicat pe VPS (2026-11-20, cu acordul tău):** cod prin `push.ps1` (3e5dba3 și următoarele); Caddy prin
+`caddy-update.sh` (dry-run cu diff, validare, copie `/etc/caddy/Caddyfile.bak-20261120-131722`, reload; Bombe,
+trenul și jocul au răspuns 200 înainte și după; toate header-ele prezente, `/colyseus/health` = 404 din afară);
+unit-ul systemd prin `setup.sh`: `systemd-analyze security masinute` = **1.5 OK** (clasamentul merge în
+continuare). D1 completat: un om contează pentru clasament doar dacă „a jucat de-adevăratelea” (din timpul
+cât mașina lui a fost pe ring după numărătoare, a ținut volan sau accelerație și nu a fost „idle” în cel puțin
+30%; un meci cere 2 astfel de oameni). Aceeași măsurare dă iconița „zzz” celorlalți (fără input > 2 s).
+
 **Rămas:**
-- de aplicat pe VPS, cu acordul tău: Caddy (`caddy-update.sh`, comenzile în `deploy/README.md`), apoi `push.ps1`,
-  apoi `setup.sh` pentru unit-ul systemd + `systemd-analyze security masinute`;
-- `deploy/Caddyfile` nu a fost validat cu un Caddy real local (descărcarea a fost blocată); `caddy-update.sh`
-  rulează `caddy validate` pe VPS înainte să scrie și are `--dry-run`;
-- CSP pe un telefon real, după deploy: `journalctl -u masinute | grep CSP:`; apoi trecerea la
-  `Content-Security-Policy`;
-- D1: un jucător care stă pe loc tot meciul (tab de umplutură) încă face meciul să conteze; propunere: un om
-  contează doar dacă a jucat efectiv;
+- CSP pe un telefon real: `journalctl -u masinute | grep CSP:`; apoi trecerea la `Content-Security-Policy`;
 - i1: log de acces Caddy (neinclus: date personale + verificarea directorului `/var/log/caddy`);
 - limitele per adresă sunt în memorie: un restart (deploy) le golește, inclusiv cota zilnică de clasament.
 

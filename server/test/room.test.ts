@@ -87,6 +87,8 @@ function skipCountdown(room: MasinuteRoom): void {
 /** Ends the match at once: last round, only `winnerId` left on the ring. */
 async function finishMatch(room: MasinuteRoom, winnerId: string): Promise<void> {
   const g = game(room);
+  // The humans here count as having played for real (that rule has its own tests in security.test.ts).
+  for (const p of Object.values(g.players)) if (!p.isBot) room['activity'].set(p.id, { onRing: 1, driving: 1 });
   g.roundsTotal = 1;
   g.roundTick = COUNTDOWN_TICKS;
   for (const p of Object.values(g.players)) p.alive = p.id === winnerId;
