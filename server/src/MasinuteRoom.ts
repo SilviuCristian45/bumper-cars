@@ -89,6 +89,8 @@ export class MasinuteRoom extends Room<{ state: RoomState }> {
     const code = generateRoomCode(Math.random, isCodeTaken);
     this.roomId = code;
     registerRoom(code, this, ownerIp);
+    // Out of the public listing: only someone with the code (joinById) finds the room.
+    void this.setPrivate(true);
 
     this.maxClients = MAX_PLAYERS;
     this.autoDispose = true;

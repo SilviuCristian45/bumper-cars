@@ -38,6 +38,8 @@ export interface GameServer {
 }
 
 export function createServer(guardOptions: GuardOptions = DEFAULT_GUARD_OPTIONS): GameServer {
+  // Matchmaking by code only: no `join`/`joinOrCreate`, which would pick any open room without its code.
+  matchMaker.controller.exposedMethods = ['create', 'joinById', 'reconnect'];
   // CORS only for the game's own pages, and never with credentials (the game has no cookies).
   matchMaker.controller.DEFAULT_CORS_HEADERS = {
     'Access-Control-Allow-Headers': 'Origin, X-Requested-With, Content-Type, Accept, Authorization',

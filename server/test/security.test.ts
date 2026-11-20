@@ -232,6 +232,22 @@ describe('M2: per-address limits, Origin and CORS', () => {
   });
 });
 
+describe('M1: nobody gets into a room without its code', () => {
+  it('refuses join and joinOrCreate, which used to drop the caller into any open lobby', async () => {
+    const host = await createRoom({});
+    expect(host.status).toBe(200);
+    const room = colyseus.getRoomById<MasinuteRoom>(host.body!.roomId!);
+    for (const method of ['join', 'joinOrCreate']) {
+      const res = await http('POST', `/matchmake/${method}/${ROOM_NAME}`, {}, { name: 'Intrus' });
+      expect(res.status).not.toBe(200);
+      expect(res.body?.roomId).toBeUndefined();
+    }
+    expect(room['_listing'].private).toBe(true);
+    // With the code it works.
+    expect((await http('POST', `/matchmake/joinById/${room.roomId}`, {}, { name: 'Ion' })).status).toBe(200);
+  });
+});
+
 describe('D4: a lobby nobody starts is closed', () => {
   it('sends everyone back to the menu with CLOSE_LOBBY_IDLE and frees the room', async () => {
     const client = await colyseus.sdk.create(ROOM_NAME, { name: 'Ana' });
