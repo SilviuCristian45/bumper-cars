@@ -11,6 +11,7 @@ export type ClientMessage =
   | { type: 'addBot' } // host, lobby
   | { type: 'removeBot' }
   | { type: 'botLevel'; level: number } // host, lobby: level for bots added from now on
+  | { type: 'powerups'; on: boolean } // host, lobby: power-ups on the ring or not
   | { type: 'setBotLevel'; botId: string; level: number } // host, lobby: one bot's level
   | { type: 'start' } // host: lobby -> round 1
   | { type: 'lobby' } // host: finished -> back to the lobby ("Încă un meci")

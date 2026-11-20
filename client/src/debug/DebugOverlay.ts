@@ -7,13 +7,17 @@ import {
   countdownSeconds,
   fightTicks,
   forwardSpeed,
+  livePowerups,
+  POWERUP_RADIUS,
   sortedPlayers,
+  TUNING,
   type BotIntent,
   type BotThought,
   type GameState,
 } from '@masinute/shared';
 import type { NetStats } from '../net/GameTransport';
 import { ARENA_CX, ARENA_CY, ARENA_R, DEPTH, FONT, GAME_H, toScreenX, toScreenY } from '../render/layout';
+import { POWERUP_INFO } from '../render/powerupInfo';
 
 // Enabled with ?debug: hitboxes, velocity and heading, each bot's intent and target, tick/FPS;
 // online also ping, the prediction error being smoothed out, unconfirmed inputs, big corrections.
@@ -21,6 +25,7 @@ import { ARENA_CX, ARENA_CY, ARENA_R, DEPTH, FONT, GAME_H, toScreenX, toScreenY 
 const INTENTS: Record<BotIntent, { label: string; color: number }> = {
   wait: { label: 'așteaptă', color: 0xaaaaaa },
   retreat: { label: 'fuge spre centru', color: 0x4cc9f0 },
+  fetch: { label: 'după power-up', color: 0xffd166 },
   hunt: { label: 'vânează', color: 0xff4d6d },
   cruise: { label: 'plimbare', color: 0x80ed99 },
 };
@@ -68,6 +73,20 @@ export class DebugOverlay {
     g.lineStyle(1, 0x00ff9c, 0.35);
     g.strokeCircle(ARENA_CX, ARENA_CY, state.ringRadius / FP);
     const used = new Set<string>();
+    // Power-ups: pickup reach, and each live oil puddle's slippery disc.
+    for (const item of livePowerups(state)) {
+      g.lineStyle(1, POWERUP_INFO[item.kind]?.color ?? 0xffffff, 0.8);
+      g.strokeCircle(toScreenX(item.x), toScreenY(item.y), (CAR_RADIUS + POWERUP_RADIUS) / FP);
+      this.label(`pu${item.slot}`, used)
+        .setText(`${POWERUP_INFO[item.kind]?.name ?? item.kind} ${(item.ticks / TICK_RATE).toFixed(1)}s`)
+        .setPosition(toScreenX(item.x), toScreenY(item.y) + 20)
+        .setColor('#ffffff');
+    }
+    for (const p of Object.values(state.players)) {
+      if (p.oilTicks <= 0) continue;
+      g.lineStyle(1, 0x9b7bd8, 0.9);
+      g.strokeCircle(toScreenX(p.oilX), toScreenY(p.oilY), TUNING.oilRadius / FP);
+    }
     for (const p of sortedPlayers(state)) {
       if (!p.alive) continue;
       const pos = screenPos(p.id) ?? { x: toScreenX(p.x), y: toScreenY(p.y) };
@@ -109,6 +128,11 @@ export class DebugOverlay {
         `eu: viteză ${((speed * TICK_RATE) / FP).toFixed(0)} px/s (înainte ${((forwardSpeed(me) * TICK_RATE) / FP).toFixed(0)})  steer ${me.steer} throttle ${me.throttle}  boost ${me.boostTicks}/${me.boostCooldown}  alunecare ${me.slideTicks}  seq ${me.lastSeq}`,
       );
     }
+    lines.push(
+      state.powerups
+        ? `power-ups: următorul în ${(state.puTimer / TICK_RATE).toFixed(1)}s  pe ring ${livePowerups(state).length}/2${me?.effect ? `  eu: ${POWERUP_INFO[me.effect]?.name} ${(me.effectTicks / TICK_RATE).toFixed(1)}s` : ''}${me?.confusedTicks ? `  amețit ${(me.confusedTicks / TICK_RATE).toFixed(1)}s` : ''}`
+        : 'power-ups: oprite',
+    );
     if (net) {
       const sim = net.lagMs || net.jitterMs ? `  (simulat +${net.lagMs}±${net.jitterMs} ms)` : '';
       lines.push(

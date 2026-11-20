@@ -8,11 +8,14 @@ import {
   COUNTDOWN_TICKS,
   ERR_ROOM_FULL,
   ERR_SERVER_FULL,
+  FP,
   isValidRoomCode,
   MAX_PLAYERS,
   MSG_EVENTS,
   MSG_PONG,
   MSG_RECORDS,
+  PU_MICI,
+  PU_SPRINGS,
   rebuildState,
   ROOM_NAME,
   type GameState,
@@ -195,6 +198,23 @@ describe('MasinuteRoom', () => {
     expect(room.state.hostId).toBe(guest.sessionId);
   });
 
+  it('lets only the host switch power-ups, only in the lobby, only with a boolean', async () => {
+    const { client, room } = await create();
+    const guest = await join(client.roomId);
+    expect(game(room).powerups).toBe(true);
+    await send(guest, room, 'powerups', { on: false });
+    expect(game(room).powerups).toBe(true);
+    await send(client, room, 'powerups', { on: 'nu' });
+    expect(game(room).powerups).toBe(true);
+    await send(client, room, 'powerups', { on: false });
+    expect(game(room).powerups).toBe(false);
+    await room.waitForNextPatch();
+    expect(room.state.powerups).toBe(false);
+    await send(client, room, 'start');
+    await send(client, room, 'powerups', { on: true });
+    expect(game(room).powerups).toBe(false);
+  });
+
   it('lets only the host set bot levels, only in the lobby, only to valid values', async () => {
     const { client, room } = await create();
     const guest = await join(client.roomId);
@@ -283,6 +303,11 @@ describe('MasinuteRoom', () => {
     await send(client, room, 'addBot');
     await send(client, room, 'start');
     skipCountdown(room);
+    // Every power-up field in use: one about to appear, one lying far away, effects and a puddle.
+    const g = game(room);
+    Object.assign(g, { puTimer: 4, pu1Kind: PU_MICI, pu1X: -300 * FP, pu1Y: -40 * FP, pu1Ticks: 200 });
+    const bot = Object.values(g.players).find((p) => p.isBot)!;
+    Object.assign(bot, { effect: PU_SPRINGS, effectTicks: 120, confusedTicks: 60, oilX: 5 * FP, oilY: -7 * FP, oilTicks: 90 });
 
     // What the server sent, tick by tick.
     const sent = new Map<number, GameState>();
@@ -307,6 +332,7 @@ describe('MasinuteRoom', () => {
     const first = Math.min(...sent.keys());
     for (const state of received.filter((r) => r.tick >= first)) expect(state).toEqual(sent.get(state.tick));
     expect(received.at(-1)!.players[client.sessionId]!.lastSeq).toBe(30);
+    expect(received.some((r) => r.pu0Kind !== 0 && r.pu1Kind === PU_MICI && r.players[bot.id]!.oilTicks > 0)).toBe(true);
   });
 
   it("sends a tick's events after its patch, tagged with the tick", async () => {

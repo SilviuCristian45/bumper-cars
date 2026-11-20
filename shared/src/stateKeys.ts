@@ -19,6 +19,16 @@ export const GAME_STATE_KEYS = [
   'ringRadius',
   'rng',
   'joinCounter',
+  'powerups',
+  'puTimer',
+  'pu0Kind',
+  'pu0X',
+  'pu0Y',
+  'pu0Ticks',
+  'pu1Kind',
+  'pu1X',
+  'pu1Y',
+  'pu1Ticks',
 ] as const satisfies readonly Exclude<keyof GameState, 'players'>[];
 
 export const PLAYER_STATE_KEYS = [
@@ -51,6 +61,12 @@ export const PLAYER_STATE_KEYS = [
   'outs',
   'points',
   'bumps',
+  'effect',
+  'effectTicks',
+  'confusedTicks',
+  'oilX',
+  'oilY',
+  'oilTicks',
 ] as const satisfies readonly (keyof PlayerState)[];
 
 /** The decoded schema as the Colyseus SDK hands it over: players in a MapSchema. */

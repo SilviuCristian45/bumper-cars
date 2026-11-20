@@ -9,8 +9,10 @@ import {
   fightTicks,
   secondsLeft,
   type GameState,
+  type PlayerState,
 } from '@masinute/shared';
 import { DEPTH, FONT, GAME_H, GAME_W, HUD_W, HUD_X, SIDE_W, TOUCH_LAYOUT } from './layout';
+import { hexColor, POWERUP_INFO } from './powerupInfo';
 import { TEX } from './textures';
 
 // Minimal HUD drawn on the canvas: round and time, the ring's state, scores, the boost meter.
@@ -30,6 +32,8 @@ export class Hud {
   private readonly round: Phaser.GameObjects.Text;
   private readonly timer: Phaser.GameObjects.Text;
   private readonly ring: Phaser.GameObjects.Text;
+  /** The player's active power-up effect and its time left (or reversed steering). */
+  private readonly effect: Phaser.GameObjects.Text;
   private readonly rows: Row[] = [];
   private readonly boostLabel?: Phaser.GameObjects.Text;
   private readonly boostBar?: Phaser.GameObjects.Graphics;
@@ -58,6 +62,8 @@ export class Hud {
     this.round = text(infoX, y, TOUCH_LAYOUT ? 30 : 24);
     this.timer = text(infoX, y + (TOUCH_LAYOUT ? 44 : 32), TOUCH_LAYOUT ? 28 : 22, '#d0d8f0');
     this.ring = text(infoX, y + (TOUCH_LAYOUT ? 84 : 60), TOUCH_LAYOUT ? 24 : 18, '#ff8fa3').setWordWrapWidth(HUD_W);
+    // Touch: under the round info; desktop: under the boost meter (placed below).
+    this.effect = text(infoX, y + 150, TOUCH_LAYOUT ? 22 : 17).setWordWrapWidth(TOUCH_LAYOUT ? SIDE_W - 24 : HUD_W);
     if (!TOUCH_LAYOUT) y += 110;
 
     const scoresY = TOUCH_LAYOUT ? 18 : y;
@@ -74,6 +80,7 @@ export class Hud {
     this.boostX = HUD_X;
     this.boostY = scoresY + 6 * ROW_H + 24;
     if (!TOUCH_LAYOUT) {
+      this.effect.setPosition(HUD_X, this.boostY + 62);
       this.boostLabel = text(this.boostX, this.boostY, 18);
       this.boostBar = scene.add.graphics().setDepth(DEPTH.hud);
       // The "Ieși (Esc)" button (GameScene) sits under this.
@@ -112,6 +119,7 @@ export class Hud {
     });
 
     const me = state.players[meId];
+    this.syncEffect(state.phase === 'playing' ? me : undefined);
     if (this.boostBar && this.boostLabel) {
       const g = this.boostBar;
       g.clear();
@@ -122,5 +130,21 @@ export class Hud {
       g.fillStyle(0x0b0618, 0.9).fillRoundedRect(this.boostX, y, HUD_W, 16, 8);
       g.fillStyle(ready >= 1 ? 0x4cc9f0 : 0x3a6ea5, 1).fillRoundedRect(this.boostX, y, Math.max(16, HUD_W * ready), 16, 8);
     }
+  }
+
+  /** "Mici cu muștar 4s" with what it does, or "Comenzi inversate! 3s". */
+  private syncEffect(me: Readonly<PlayerState> | undefined): void {
+    const info = me && me.effect && me.effectTicks > 0 ? POWERUP_INFO[me.effect] : undefined;
+    const lines: string[] = [];
+    let color = '#eaf2ff';
+    if (info && me) {
+      lines.push(`${info.name} ${Math.ceil(me.effectTicks / TICK_RATE)}s`, info.hint);
+      color = hexColor(info.color);
+    }
+    if (me && me.confusedTicks > 0) {
+      lines.push(`Comenzi inversate! ${Math.ceil(me.confusedTicks / TICK_RATE)}s`);
+      if (!info) color = '#c77dff';
+    }
+    this.effect.setText(lines.join('\n')).setColor(color);
   }
 }

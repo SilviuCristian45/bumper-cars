@@ -53,6 +53,13 @@ export interface PlayerState {
   outs: number; // eliminated, any reason
   points: number;
   bumps: number; // hits dealt, statistics only
+  // Power-ups (all 0 when they are off)
+  effect: number; // active effect (PU_MICI, PU_LIFEBUOY, PU_TUICA, PU_SPRINGS) or PU_NONE
+  effectTicks: number; // ticks left of it
+  confusedTicks: number; // >0: steering reversed (hit by someone with Țuică)
+  oilX: number; // this car's oil puddle (one at a time), live while oilTicks > 0
+  oilY: number;
+  oilTicks: number;
 }
 
 export interface GameState {
@@ -70,6 +77,19 @@ export interface GameState {
   ringRadius: number;
   rng: number; // uint32 RNG state
   joinCounter: number;
+  /** Lobby option (host): power-ups on the ring. Off, the simulation is exactly the one without them. */
+  powerups: boolean;
+  /** Fighting ticks until the next power-up tries to appear. */
+  puTimer: number;
+  // The power-ups lying on the ring: two flat slots (kind PU_NONE = empty), see powerups.ts.
+  pu0Kind: number;
+  pu0X: number;
+  pu0Y: number;
+  pu0Ticks: number; // ticks left before it vanishes
+  pu1Kind: number;
+  pu1X: number;
+  pu1Y: number;
+  pu1Ticks: number;
   players: Record<string, PlayerState>;
 }
 
@@ -83,4 +103,16 @@ export type GameEvent =
   | { type: 'go'; round: number } // countdown over: START!
   | { type: 'shrinkStart' }
   | { type: 'roundEnd'; round: number; winnerId: string; outcome: RoundOutcome }
-  | { type: 'matchEnd'; standings: string[] };
+  | { type: 'matchEnd'; standings: string[] }
+  /** A power-up appeared on the ring. */
+  | { type: 'powerupSpawn'; kind: number; x: number; y: number }
+  /** A car drove over a power-up (it takes effect at once). */
+  | { type: 'pickup'; playerId: string; kind: number }
+  /** Claxon de TIR went off at x/y. */
+  | { type: 'horn'; playerId: string; x: number; y: number }
+  /** Colac de salvare cancelled a fall off the ring. */
+  | { type: 'saved'; playerId: string }
+  /** Țuică: `playerId` was hit by `byId` and steers backwards for a while. */
+  | { type: 'confused'; playerId: string; byId: string }
+  /** A hit with Bară cu arcuri (x/y: contact point). */
+  | { type: 'spring'; playerId: string; x: number; y: number };

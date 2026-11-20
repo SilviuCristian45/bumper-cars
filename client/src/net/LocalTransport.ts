@@ -8,6 +8,7 @@ import {
   runTick,
   setBotLevel,
   setDefaultBotLevel,
+  setPowerups,
   setRounds,
   skipBotRound,
   startMatch,
@@ -27,6 +28,8 @@ export interface LocalOptions {
   /** Level of the bots added at the start (BOT_EASY..BOT_HARD); the room default otherwise. */
   botLevel?: number;
   rounds: number;
+  /** Power-ups on the ring (default: on, as in a new room). */
+  powerups?: boolean;
   seed: string;
   /** Start round 1 right away (test URL options) instead of waiting in the lobby. */
   autoStart: boolean;
@@ -57,6 +60,7 @@ export class LocalTransport implements GameTransport {
     if (opts.botLevel !== undefined) setDefaultBotLevel(this.state, this.playerId, opts.botLevel);
     for (let i = 0; i < opts.bots; i++) this.addBot();
     setRounds(this.state, this.playerId, opts.rounds);
+    if (opts.powerups !== undefined) setPowerups(this.state, this.playerId, opts.powerups);
     if (opts.autoStart) startMatch(this.state, this.playerId);
   }
 
@@ -76,6 +80,7 @@ export class LocalTransport implements GameTransport {
     else if (msg.type === 'removeBot') removeBot(this.state, this.playerId);
     else if (msg.type === 'botLevel') setDefaultBotLevel(this.state, this.playerId, msg.level);
     else if (msg.type === 'setBotLevel') setBotLevel(this.state, this.playerId, msg.botId, msg.level);
+    else if (msg.type === 'powerups') setPowerups(this.state, this.playerId, msg.on);
     else if (msg.type === 'start') startMatch(this.state, this.playerId);
     else if (msg.type === 'lobby') backToLobby(this.state, this.playerId);
     else if (msg.type === 'skipRound') this.skipRound();

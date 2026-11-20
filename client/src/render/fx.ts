@@ -91,3 +91,41 @@ export function outBurst(scene: Phaser.Scene, x: number, y: number, color: numbe
     },
   });
 }
+
+/** Claxon de TIR: a ring of air rushing out to `radius` pixels (reduced effects: one faint ring). */
+export function shockwave(scene: Phaser.Scene, x: number, y: number, radius: number, color: number): void {
+  const reduced = reducedEffects();
+  const rings = reduced ? 1 : 3;
+  for (let i = 0; i < rings; i++) {
+    const g = scene.add.graphics().setDepth(DEPTH.fx);
+    const wave = { r: 10, a: reduced ? 0.45 : 0.9 };
+    scene.tweens.add({
+      targets: wave,
+      r: radius,
+      a: 0,
+      delay: i * 90,
+      duration: 420,
+      ease: 'Quad.easeOut',
+      onUpdate: () => {
+        g.clear();
+        g.lineStyle(reduced ? 3 : 6 - i * 1.5, color, wave.a);
+        g.strokeCircle(x, y, wave.r);
+      },
+      onComplete: () => g.destroy(),
+    });
+  }
+}
+
+/** A few glints where a power-up appears or is picked up. */
+export function powerupSparkle(scene: Phaser.Scene, x: number, y: number, color: number): void {
+  burst(scene, x, y, {
+    count: 14,
+    lifespanMs: 500,
+    config: {
+      speed: { min: 30, max: 110 },
+      scale: { start: 1, end: 0 },
+      tint: [color, 0xffffff],
+      blendMode: Phaser.BlendModes.ADD,
+    },
+  });
+}

@@ -1,5 +1,5 @@
 // Bots-only tournament over many seeds: round wins, points and timings per bot level.
-//   npm run balance -w shared -- --matches 40 --lineup usor,usor,mediu,mediu,greu,greu
+//   npm run balance -w shared -- --matches 40 --lineup usor,usor,mediu,mediu,greu,greu [--powerups off]
 import { parseArgs } from 'node:util';
 import {
   BOT_EASY,
@@ -20,6 +20,7 @@ const { values } = parseArgs({
   options: {
     matches: { type: 'string', default: '40' },
     lineup: { type: 'string', default: 'usor,usor,mediu,mediu,greu,greu' },
+    powerups: { type: 'string', default: 'on' }, // on | off
   },
 });
 const lineup = values.lineup.split(',').map((s) => LEVELS[s.trim()]!);
@@ -39,6 +40,7 @@ for (let m = 0; m < Number(values.matches); m++) {
   lineup.forEach((level, i) => addPlayer(state, `b${i}`, `b${i}`, true, level));
   state.hostId = 'b0';
   setRounds(state, 'b0', 5);
+  state.powerups = values.powerups !== 'off';
   startMatch(state, 'b0');
   let sawOut = false;
   while (state.phase !== 'finished') {

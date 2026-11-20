@@ -22,6 +22,9 @@ const pxPerSecond = (v: number) => `${Math.round((v * TICK_RATE) / FP)} px/s`;
 const pxPerSecond2 = (v: number) => `${Math.round((v * TICK_RATE * TICK_RATE) / FP)} px/s²`;
 const degPerSecond = (v: number) => `${Math.round((v * 360 * TICK_RATE) / 1024)}°/s`;
 const perMille = (v: number) => `${(v / 10).toFixed(1)}%/tick`;
+const seconds = (v: number) => `${(v / TICK_RATE).toFixed(1)} s`;
+const pixels = (v: number) => `${Math.round(v / FP)} px`;
+const percent = (v: number) => `${v}%`;
 
 const SPECS: Spec[] = [
   { key: 'accel', constant: 'ACCEL', label: 'Accelerație', min: 30, max: 300, step: 5, unit: pxPerSecond2 },
@@ -36,6 +39,21 @@ const SPECS: Spec[] = [
   { key: 'boostAccel', constant: 'BOOST_ACCEL', label: 'Putere boost', min: 100, max: 1200, step: 10, unit: pxPerSecond2 },
   { key: 'boostMaxSpeed', constant: 'BOOST_MAX_SPEED', label: 'Viteză maximă boost', min: 1500, max: 6000, step: 20, unit: pxPerSecond },
   { key: 'boostMass', constant: 'BOOST_MASS', label: 'Masă în boost (normal 100)', min: 100, max: 400, step: 10 },
+  // Power-ups
+  { key: 'hornRadius', constant: 'HORN_RADIUS', label: 'Claxon: rază', min: 40 * FP, max: 300 * FP, step: 2 * FP, unit: pixels },
+  { key: 'hornPush', constant: 'HORN_PUSH', label: 'Claxon: împingere', min: 500, max: 6000, step: 50, unit: pxPerSecond },
+  { key: 'miciTicks', constant: 'MICI_TICKS', label: 'Mici: durată', min: TICK_RATE, max: 20 * TICK_RATE, step: TICK_RATE / 2, unit: seconds },
+  { key: 'miciMassPct', constant: 'MICI_MASS_PCT', label: 'Mici: masă', min: 100, max: 400, step: 10, unit: percent },
+  { key: 'miciSpeedPct', constant: 'MICI_SPEED_PCT', label: 'Mici: viteză', min: 50, max: 100, step: 1, unit: percent },
+  { key: 'lifebuoyTicks', constant: 'LIFEBUOY_TICKS', label: 'Colac: durată', min: TICK_RATE, max: 30 * TICK_RATE, step: TICK_RATE / 2, unit: seconds },
+  { key: 'lifebuoyBounce', constant: 'LIFEBUOY_BOUNCE', label: 'Colac: respingere', min: 300, max: 4000, step: 50, unit: pxPerSecond },
+  { key: 'oilTicks', constant: 'OIL_TICKS', label: 'Ulei: durată baltă', min: TICK_RATE, max: 20 * TICK_RATE, step: TICK_RATE / 2, unit: seconds },
+  { key: 'oilRadius', constant: 'OIL_RADIUS', label: 'Ulei: rază baltă', min: 20 * FP, max: 120 * FP, step: 2 * FP, unit: pixels },
+  { key: 'oilGrip', constant: 'OIL_GRIP', label: 'Ulei: aderență', min: 0, max: 130, step: 1, unit: perMille },
+  { key: 'tuicaTicks', constant: 'TUICA_TICKS', label: 'Țuică: durată', min: TICK_RATE, max: 20 * TICK_RATE, step: TICK_RATE / 2, unit: seconds },
+  { key: 'tuicaConfuseTicks', constant: 'TUICA_CONFUSE_TICKS', label: 'Țuică: comenzi inversate', min: TICK_RATE, max: 10 * TICK_RATE, step: TICK_RATE / 2, unit: seconds },
+  { key: 'springsTicks', constant: 'SPRINGS_TICKS', label: 'Arcuri: durată', min: TICK_RATE, max: 20 * TICK_RATE, step: TICK_RATE / 2, unit: seconds },
+  { key: 'springsPct', constant: 'SPRINGS_PCT', label: 'Arcuri: putere', min: 100, max: 400, step: 10, unit: percent },
 ];
 
 const STORAGE_KEY = 'tune';

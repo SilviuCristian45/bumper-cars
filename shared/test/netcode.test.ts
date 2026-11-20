@@ -12,6 +12,7 @@ import {
   nextRandom,
   parseInput,
   PLAYER_STATE_KEYS,
+  PU_SPRINGS,
   Predictor,
   rebuildState,
   runTick,
@@ -125,6 +126,29 @@ describe('Predictor', () => {
     expect(server.players.me!.lastSeq).toBe(501);
     predictor.reconcile(server);
     expect(predictor.unconfirmed).toBe(0);
+    expect(predictor.state).toEqual(server);
+  });
+
+  it('corrects a contested pickup the server gave to someone else', () => {
+    const server = makeRace([{ id: 'me', x: -px(60) }, { id: 'foe', x: px(60), heading: 512 }]);
+    Object.assign(server, { powerups: true, puTimer: 1_000_000, pu0Kind: PU_SPRINGS, pu0X: 0, pu0Y: 0, pu0Ticks: 300 });
+    const predictor = new Predictor('me');
+    predictor.reconcile(server);
+    // Both drive at it; the client does not know yet that the other car boosted.
+    let predictedMine = false;
+    for (let t = 0; t < 16; t++) {
+      const sent = predictor.advance({ steer: 0, throttle: 100, boost: false });
+      predictedMine ||= predictor.state!.players.me!.effect === PU_SPRINGS;
+      runTick(server, [
+        { ...sent, playerId: 'me' },
+        { seq: t + 1, steer: 0, throttle: 100, boost: t === 0, playerId: 'foe' },
+      ]);
+    }
+    expect(predictedMine).toBe(true);
+    expect(server.players.foe!.effect).toBe(PU_SPRINGS);
+    expect(server.players.me!.effect).toBe(0);
+    // The server's word wins: the prediction is rebuilt from it and matches it exactly.
+    predictor.reconcile(server);
     expect(predictor.state).toEqual(server);
   });
 

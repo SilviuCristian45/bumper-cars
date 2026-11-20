@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
-import { BOOST_COOLDOWN_TICKS, CAR_RADIUS, FP, PLAYER_COLORS, type PlayerState } from '@masinute/shared';
+import { BOOST_COOLDOWN_TICKS, CAR_RADIUS, FP, PLAYER_COLORS, effectDuration, type PlayerState } from '@masinute/shared';
+import { reducedEffects } from '../settings';
 import { DEPTH, FONT, TOUCH_LAYOUT } from './layout';
+import { POWERUP_INFO } from './powerupInfo';
 import { TEX } from './textures';
 
 const CAR_R = CAR_RADIUS / FP;
@@ -8,13 +10,19 @@ const CAR_R = CAR_RADIUS / FP;
 const ANTENNA_BACK = CAR_R - 5;
 const OUT_MS = 650;
 
-/** One car on screen: shadow, body, antenna spark, name tag; the local car also gets its boost ring. */
+/**
+ * One car on screen: shadow, body, antenna spark, name tag; the local car also gets its boost ring.
+ * Power-ups: a colored aura whose arc runs down with the effect's time, and a spinning "?" over
+ * a car whose steering Țuică turned around.
+ */
 export class CarView {
   private readonly shadow: Phaser.GameObjects.Image;
   private readonly body: Phaser.GameObjects.Image;
   private readonly antenna: Phaser.GameObjects.Image;
   private readonly label: Phaser.GameObjects.Text;
   private readonly ring?: Phaser.GameObjects.Graphics;
+  private readonly aura: Phaser.GameObjects.Graphics;
+  private readonly dizzy: Phaser.GameObjects.Text;
   private out = false;
 
   constructor(private readonly scene: Phaser.Scene, p: Readonly<PlayerState>, local: boolean) {
@@ -39,6 +47,12 @@ export class CarView {
       .setOrigin(0.5, 1)
       .setDepth(DEPTH.labels);
     if (local) this.ring = scene.add.graphics().setDepth(DEPTH.marks);
+    this.aura = scene.add.graphics().setDepth(DEPTH.shadow);
+    this.dizzy = scene.add
+      .text(0, 0, '?', { fontFamily: FONT, fontSize: '26px', fontStyle: 'bold', color: '#c77dff', stroke: '#120a24', strokeThickness: 5 })
+      .setOrigin(0.5)
+      .setDepth(DEPTH.labels)
+      .setVisible(false);
   }
 
   /** Places the car at screen pixels with the heading in radians; `p` gives boost and cooldown. */
@@ -54,6 +68,13 @@ export class CarView {
       .setScale(p.boostTicks > 0 ? 0.9 : 0.5);
     this.label.setPosition(x, y - CAR_R - 6);
     if (this.ring) this.drawRing(x, y, p);
+    this.drawAura(x, y, p, time);
+    const dizzy = p.confusedTicks > 0;
+    this.dizzy.setVisible(dizzy);
+    if (dizzy) {
+      const spin = reducedEffects() ? 0 : time / 160;
+      this.dizzy.setPosition(x + Math.cos(spin) * 10, y - CAR_R - 30 + Math.sin(spin) * 4).setRotation(reducedEffects() ? 0 : Math.sin(time / 120) * 0.5);
+    }
   }
 
   setVisible(visible: boolean): void {
@@ -65,6 +86,8 @@ export class CarView {
     if (this.out) return;
     this.out = true;
     this.ring?.clear();
+    this.aura.clear();
+    this.dizzy.setVisible(false);
     this.scene.tweens.add({
       targets: [this.body, this.shadow, this.antenna],
       scale: 0.25,
@@ -98,7 +121,23 @@ export class CarView {
   }
 
   private parts(): (Phaser.GameObjects.Image | Phaser.GameObjects.Text | Phaser.GameObjects.Graphics)[] {
-    return [this.shadow, this.body, this.antenna, this.label, ...(this.ring ? [this.ring] : [])];
+    return [this.shadow, this.body, this.antenna, this.label, this.aura, this.dizzy, ...(this.ring ? [this.ring] : [])];
+  }
+
+  /** While an effect lasts: a soft colored disc under the car and an arc that shrinks with the time left. */
+  private drawAura(x: number, y: number, p: Readonly<PlayerState>, time: number): void {
+    const g = this.aura;
+    g.clear();
+    const info = p.effect ? POWERUP_INFO[p.effect] : undefined;
+    if (!info || p.effectTicks <= 0) return;
+    const left = Math.min(1, p.effectTicks / Math.max(1, effectDuration(p.effect)));
+    const pulse = reducedEffects() ? 0.3 : 0.25 + 0.12 * Math.sin(time / 140);
+    g.fillStyle(info.color, pulse);
+    g.fillCircle(x, y, CAR_R + 12);
+    g.lineStyle(4, info.color, 0.95);
+    g.beginPath();
+    g.arc(x, y, CAR_R + 11, -Math.PI / 2, -Math.PI / 2 + left * Math.PI * 2);
+    g.strokePath();
   }
 
   /** Local car: a ring under it that fills up while the boost recharges and glows when ready. */

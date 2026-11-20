@@ -52,6 +52,8 @@ export class LobbyScene extends Phaser.Scene {
   private rows: PlayerRow[] = [];
   private roundButtons: HTMLButtonElement[] = [];
   private levelButtons: HTMLButtonElement[] = [];
+  /** Power-ups "Da" / "Nu". */
+  private powerupButtons: HTMLButtonElement[] = [];
   private addBotButton!: HTMLButtonElement;
   private removeBotButton!: HTMLButtonElement;
   private startButton!: HTMLButtonElement;
@@ -115,6 +117,7 @@ export class LobbyScene extends Phaser.Scene {
     const rules = [
       `Ultimul rămas pe ring +${POINTS_ROUND_WIN} · scoți pe cineva din ring +${POINTS_KNOCKOUT} · ieși singur ${POINTS_SELF_OUT}`,
       'Punctul de scos e al celui care l-a lovit ultimul (în 3 secunde).',
+      'Power-up-uri: treci peste ele ca să le iei (claxon, mici, colac, ulei, țuică, arcuri).',
     ];
     return el('div', { class: 'lobby-players' }, [this.countText, list, el('p', { class: 'rules', text: rules.join('\n') })]);
   }
@@ -130,6 +133,11 @@ export class LobbyScene extends Phaser.Scene {
       b.classList.add('level-btn');
       return b;
     });
+    this.powerupButtons = [true, false].map((on) => {
+      const b = button(on ? 'Da' : 'Nu', () => this.transport.send({ type: 'powerups', on }));
+      b.classList.add('round-btn');
+      return b;
+    });
     this.addBotButton = button('+Bot', () => this.transport.send({ type: 'addBot' }));
     this.removeBotButton = button('-Bot', () => this.transport.send({ type: 'removeBot' }));
     this.startButton = button('Start', () => this.transport.send({ type: 'start' }), 'primary', 'medium');
@@ -138,6 +146,8 @@ export class LobbyScene extends Phaser.Scene {
     return el('div', { class: 'lobby-side' }, [
       el('div', { class: 'label', text: 'Runde' }),
       el('div', { class: 'btn-row' }, this.roundButtons),
+      el('div', { class: 'label', text: 'Power-up-uri' }),
+      el('div', { class: 'btn-row' }, this.powerupButtons),
       el('div', { class: 'label', text: 'Nivel boți' }),
       el('div', { class: 'btn-row' }, this.levelButtons),
       el('div', { class: 'btn-row' }, [this.addBotButton, this.removeBotButton]),
@@ -190,6 +200,11 @@ export class LobbyScene extends Phaser.Scene {
       const b = this.roundButtons[i]!;
       setButtonStyle(b, state.roundsTotal === rounds ? 'primary' : 'secondary');
       b.disabled = !isHost && state.roundsTotal !== rounds;
+    });
+    [true, false].forEach((on, i) => {
+      const b = this.powerupButtons[i]!;
+      setButtonStyle(b, state.powerups === on ? 'primary' : 'secondary');
+      b.disabled = !isHost && state.powerups !== on;
     });
     BOT_LEVELS.forEach((level, i) => {
       const b = this.levelButtons[i]!;

@@ -12,6 +12,7 @@ import {
   SPAWN_RADIUS,
 } from './constants';
 import { ANGLE_STEPS, icos, idiv, isin, TRIG_ONE, wrapAngle } from './fixed';
+import { clearPowerups } from './powerups';
 import { nextInt, seedFrom } from './rng';
 import type { GameEvent, GameState, PlayerState } from './types';
 
@@ -36,6 +37,16 @@ export function createGameState(opts: CreateOptions): GameState {
     ringRadius: RING_RADIUS,
     rng: seedFrom(opts.seed),
     joinCounter: 0,
+    powerups: true,
+    puTimer: 0,
+    pu0Kind: 0,
+    pu0X: 0,
+    pu0Y: 0,
+    pu0Ticks: 0,
+    pu1Kind: 0,
+    pu1X: 0,
+    pu1Y: 0,
+    pu1Ticks: 0,
     players: {},
   };
 }
@@ -91,6 +102,12 @@ export function addPlayer(state: GameState, id: string, name: string, isBot = fa
     outs: 0,
     points: 0,
     bumps: 0,
+    effect: 0,
+    effectTicks: 0,
+    confusedTicks: 0,
+    oilX: 0,
+    oilY: 0,
+    oilTicks: 0,
   };
   state.players[id] = player;
   if (!state.hostId && !isBot) state.hostId = id;
@@ -189,6 +206,13 @@ export function setRounds(state: GameState, byId: string, rounds: number): boole
   return true;
 }
 
+/** Host, lobby: power-ups on or off for the next match. */
+export function setPowerups(state: GameState, byId: string, on: boolean): boolean {
+  if (byId !== state.hostId || state.phase !== 'lobby' || typeof on !== 'boolean') return false;
+  state.powerups = on;
+  return true;
+}
+
 export function canStart(state: GameState, byId: string): boolean {
   return (
     byId === state.hostId && state.phase === 'lobby' && Object.keys(state.players).length >= MIN_PLAYERS_TO_START
@@ -219,6 +243,7 @@ export function backToLobby(state: GameState, byId: string): boolean {
   state.roundWinner = '';
   state.roundOutcome = '';
   state.ringRadius = RING_RADIUS;
+  clearPowerups(state);
   for (const p of Object.values(state.players)) {
     if (p.left) delete state.players[p.id];
     else p.alive = false;
@@ -237,6 +262,7 @@ export function startRound(state: GameState): void {
   state.roundWinner = '';
   state.roundOutcome = '';
   state.ringRadius = RING_RADIUS;
+  clearPowerups(state);
   const racers = sortedPlayers(state).filter((p) => !p.left);
   const offset = nextInt(state, ANGLE_STEPS);
   racers.forEach((p, i) => {
@@ -257,6 +283,10 @@ export function startRound(state: GameState): void {
     p.slideTicks = 0;
     p.lastHitBy = '';
     p.lastHitTick = 0;
+    p.effect = 0;
+    p.effectTicks = 0;
+    p.confusedTicks = 0;
+    p.oilTicks = 0;
   }
 }
 

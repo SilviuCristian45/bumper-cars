@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
-import { CAR_RADIUS, FP, MAX_PLAYERS, PLAYER_COLORS } from '@masinute/shared';
+import { CAR_RADIUS, FP, MAX_PLAYERS, PLAYER_COLORS, POWERUP_KINDS } from '@masinute/shared';
 import { ARENA_R, RIM_W } from './layout';
+import { drawOilPuddle, OIL_TEX, POWERUP_DRAW, POWERUP_TEX } from './powerupTextures';
 
 // Every texture is drawn from code at startup with the 2D canvas API (no image assets).
 
@@ -11,6 +12,8 @@ export const TEX = {
   spark: 'spark',
   shadow: 'shadow',
   car: (slot: number) => `car${slot}`,
+  powerup: (kind: number) => `pu${kind}`,
+  oil: 'oil',
 } as const;
 
 const CAR_R = CAR_RADIUS / FP;
@@ -26,6 +29,8 @@ export function ensureTextures(scene: Phaser.Scene): void {
   for (let slot = 0; slot < MAX_PLAYERS; slot++) {
     add(scene, TEX.car(slot), CAR_TEX, CAR_TEX, (g) => drawCar(g, PLAYER_COLORS[slot]!));
   }
+  for (const kind of POWERUP_KINDS) add(scene, TEX.powerup(kind), POWERUP_TEX, POWERUP_TEX, POWERUP_DRAW[kind]!);
+  add(scene, TEX.oil, OIL_TEX, OIL_TEX, drawOilPuddle);
 }
 
 function add(scene: Phaser.Scene, key: string, w: number, h: number, draw: (g: CanvasRenderingContext2D, w: number, h: number) => void): void {

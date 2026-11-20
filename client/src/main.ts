@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import './style.css';
 import './screens.css';
 import { DEFAULT_ROUNDS, isValidRoomCode, MAX_PLAYERS, normalizeRoomCode, ROUND_OPTIONS } from '@masinute/shared';
+import { initSfx } from './audio/sfx';
+import { initMute } from './audio/sound';
 import { parseBotLevel } from './botLevels';
 import { isTouch } from './device';
 import { LocalTransport } from './net/LocalTransport';
@@ -17,11 +19,11 @@ import { NameScene } from './scenes/NameScene';
 import { initChrome } from './ui/chrome';
 import { trackVisualViewport } from './ui/dom';
 import { initRotatePrompt } from './ui/orientation';
-import { debug, params, quickStart as quick } from './urlOptions';
+import { debug, params, quickPowerups, quickStart as quick } from './urlOptions';
 
 // Test URL options skip the intro and menu and start a local match at once:
 // ?debug, ?bots=1..5 (default 3), ?rounds=3|5|7, ?seed=abc, ?botlevel=usor|mediu|greu,
-// ?tune (driving-feel sliders). ?touch / ?touch=0 only force the layout (device.ts).
+// ?tune (driving-feel sliders), ?powerups=0. ?touch / ?touch=0 only force the layout (device.ts).
 // ?online, ?lag=ms, ?jitter=ms keep the menus (online testing; ?debug then shows the net numbers).
 const tune = params.has('tune');
 // The panel gets its own column on wide screens, so it never covers the scores.
@@ -36,6 +38,7 @@ function quickStart(): GameSceneData {
       bots,
       botLevel: parseBotLevel(params.get('botlevel')),
       rounds: ROUND_OPTIONS.includes(rounds) ? rounds : DEFAULT_ROUNDS,
+      powerups: quickPowerups,
       seed: params.get('seed') ?? Math.random().toString(36).slice(2),
       autoStart: true,
     }),
@@ -77,8 +80,10 @@ const game = new Phaser.Game({
   // The canvas only sees one finger at a time (overlay taps); the HTML touch controls track their own.
   input: { activePointers: 1 },
 });
-// HTML layers over the canvas: the fullscreen icon and the rotate prompt (toasts and dialogs come and go).
-initChrome();
+initMute(game);
+initSfx(game);
+// HTML layers over the canvas: the sound and fullscreen icons and the rotate prompt (toasts and dialogs come and go).
+initChrome(game);
 initRotatePrompt();
 trackVisualViewport();
 game.scene.add('intro', IntroScene, !quick && !resume, menuData());

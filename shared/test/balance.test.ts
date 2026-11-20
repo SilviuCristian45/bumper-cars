@@ -5,7 +5,10 @@ import { BOT_EASY, BOT_HARD, BOT_MEDIUM, addPlayer, createGameState, runTick, st
 // Retune BOT_PARAMS against this (scripts/balance.ts prints the same numbers over more matches).
 
 describe('bot balance', () => {
-  it('Greu > Mediu > Ușor in round wins and points', () => {
+  it.each([
+    ['on', true],
+    ['off', false],
+  ])('Greu > Mediu > Ușor in round wins and points, power-ups %s', (_label, powerups) => {
     const wins = [0, 0, 0];
     const points = [0, 0, 0];
     for (let m = 0; m < 16; m++) {
@@ -15,6 +18,7 @@ describe('bot balance', () => {
       );
       state.hostId = 'b0';
       state.roundsTotal = 5;
+      state.powerups = powerups;
       startMatch(state, 'b0');
       while (state.phase !== 'finished') {
         for (const e of runTick(state, [])) {

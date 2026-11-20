@@ -1,5 +1,5 @@
 // Runs a bots-only match headless and prints the outcome, to check the simulation without the client.
-//   npm run sim -- --bots usor,mediu,greu,greu --rounds 5 --seed abc --verbose
+//   npm run sim -- --bots usor,mediu,greu,greu --rounds 5 --seed abc --verbose [--powerups off]
 import { parseArgs } from 'node:util';
 import {
   BOT_EASY,
@@ -25,6 +25,7 @@ const { values } = parseArgs({
     bots: { type: 'string', default: 'usor,mediu,greu' },
     rounds: { type: 'string', default: '3' },
     seed: { type: 'string', default: 'balci' },
+    powerups: { type: 'string', default: 'on' }, // on | off
     verbose: { type: 'boolean', short: 'v', default: false },
   },
 });
@@ -41,6 +42,7 @@ levels.forEach((level, i) => addPlayer(state, `b${i + 1}`, `${LEVEL_NAMES[level]
 // Bots never become host on their own; here one acts as host so the lobby functions accept the setup.
 state.hostId = 'b1';
 if (!setRounds(state, 'b1', Number(values.rounds))) throw new Error('Runde: 3, 5 sau 7.');
+state.powerups = values.powerups !== 'off';
 startMatch(state, 'b1');
 
 const name = (id: string) => state.players[id]?.name ?? '-';

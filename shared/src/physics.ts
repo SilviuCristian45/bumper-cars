@@ -5,6 +5,9 @@ import {
   HIT_MIN_SPEED,
   INPUT_MAX,
   MAX_REVERSE_SPEED,
+  PU_MICI,
+  PU_SPRINGS,
+  PU_TUICA,
   REVERSE_ACCEL,
   SLIDE_TICKS,
   TURN_FULL_SPEED,
@@ -28,14 +31,29 @@ function decay(v: number, k: number): number {
   return v > 0 ? Math.max(v - d, 0) : Math.min(v + d, 0);
 }
 
-/** Steering, throttle, boost, friction and grip for one tick, then the move. */
-export function driveCar(p: PlayerState): void {
+/** Mici: a bit slower, in accel and top speed (percent; 100 otherwise). */
+function speedPct(p: PlayerState): number {
+  return p.effect === PU_MICI ? TUNING.miciSpeedPct : 100;
+}
+
+/** Scales by a percent, exact when it is 100 (power-ups off: the numbers stay what they were). */
+function pct(v: number, percent: number): number {
+  return percent === 100 ? v : idiv(v * percent, 100);
+}
+
+/**
+ * Steering, throttle, boost, friction and grip for one tick, then the move. `oiled`: on someone's
+ * oil puddle, the car barely grips sideways.
+ */
+export function driveCar(p: PlayerState, oiled = false): void {
   const fwd0 = forwardSpeed(p);
 
   // Turning: possible on the spot, quicker when moving; reversed when rolling backwards, like a car.
   const speedFactor = Math.min(Math.abs(fwd0), TURN_FULL_SPEED);
   const turnRate = TUNING.turnStill + idiv((TUNING.turnMoving - TUNING.turnStill) * speedFactor, TURN_FULL_SPEED);
-  const steer = fwd0 < -TURN_FULL_SPEED / 4 ? -p.steer : p.steer;
+  // Țuică: the steering is reversed for a while.
+  const held = p.confusedTicks > 0 ? -p.steer : p.steer;
+  const steer = fwd0 < -TURN_FULL_SPEED / 4 ? -held : held;
   p.heading = wrapAngle(p.heading + idiv(steer * turnRate, INPUT_MAX));
 
   const cos = icos(p.heading);
@@ -44,7 +62,7 @@ export function driveCar(p: PlayerState): void {
   let side = idiv(-p.vx * sin + p.vy * cos, TRIG_ONE);
 
   let accel = 0;
-  if (p.throttle > 0) accel = idiv(p.throttle * TUNING.accel, INPUT_MAX);
+  if (p.throttle > 0) accel = idiv(p.throttle * pct(TUNING.accel, speedPct(p)), INPUT_MAX);
   else if (p.throttle < 0) accel = idiv(p.throttle * (fwd > 0 ? TUNING.brake : REVERSE_ACCEL), INPUT_MAX);
   if (p.boostTicks > 0) {
     accel += TUNING.boostAccel;
@@ -55,14 +73,14 @@ export function driveCar(p: PlayerState): void {
   else fwd += accel;
   if (p.throttle <= 0 || fwd < 0) fwd = decay(fwd, TUNING.friction);
   else fwd = fwd - idiv(fwd * TUNING.friction, 1000);
-  side = decay(side, p.slideTicks > 0 ? TUNING.gripHit : TUNING.grip);
+  side = decay(side, oiled ? TUNING.oilGrip : p.slideTicks > 0 ? TUNING.gripHit : TUNING.grip);
   if (p.slideTicks > 0) p.slideTicks--;
   if (fwd < -MAX_REVERSE_SPEED) fwd = -MAX_REVERSE_SPEED;
 
   p.vx = idiv(fwd * cos - side * sin, TRIG_ONE);
   p.vy = idiv(fwd * sin + side * cos, TRIG_ONE);
   if (p.boostTicks > 0) limitSpeed(p, TUNING.boostMaxSpeed, true);
-  else limitSpeed(p, TUNING.maxSpeed, false);
+  else limitSpeed(p, pct(TUNING.maxSpeed, speedPct(p)), false);
 
   p.x += p.vx;
   p.y += p.vy;
@@ -80,8 +98,10 @@ function limitSpeed(p: PlayerState, max: number, hard: boolean): void {
   p.vy = idiv(p.vy * target, sp);
 }
 
+/** A boosting car is heavier; Mici double that again. */
 export function massOf(p: PlayerState): number {
-  return p.boostTicks > 0 ? TUNING.boostMass : CAR_MASS;
+  const base = p.boostTicks > 0 ? TUNING.boostMass : CAR_MASS;
+  return p.effect === PU_MICI ? pct(base, TUNING.miciMassPct) : base;
 }
 
 /**
@@ -123,17 +143,21 @@ export function collide(a: PlayerState, b: PlayerState, tick: number, events: Ga
   const closing = approachA + approachB;
   if (closing <= 0) return; // already moving apart
 
-  // Impulse J = (1 + e) * closing * ma * mb / (ma + mb); a loses J/ma along n, b gains J/mb.
-  const impulse = idiv((100 + TUNING.restitution) * closing * ma * mb, 100 * (ma + mb));
-  a.vx -= idiv(impulse * nx, ma * TRIG_ONE);
-  a.vy -= idiv(impulse * ny, ma * TRIG_ONE);
-  b.vx += idiv(impulse * nx, mb * TRIG_ONE);
-  b.vy += idiv(impulse * ny, mb * TRIG_ONE);
-
   // Knockout credit: whoever drove into the other hard enough hit them; if neither did,
   // the faster of the two counts as the hitter.
   const aHits = approachA >= HIT_MIN_SPEED || (approachB < HIT_MIN_SPEED && approachA > approachB);
   const bHits = approachB >= HIT_MIN_SPEED || (approachA < HIT_MIN_SPEED && approachB > approachA);
+
+  // Impulse J = (1 + e) * closing * ma * mb / (ma + mb); a loses J/ma along n, b gains J/mb.
+  // Bară cu arcuri: the hitter's springs shove the other car harder (the hitter's own share stays).
+  const impulse = idiv((100 + TUNING.restitution) * closing * ma * mb, 100 * (ma + mb));
+  const toA = bHits && b.effect === PU_SPRINGS ? pct(impulse, TUNING.springsPct) : impulse;
+  const toB = aHits && a.effect === PU_SPRINGS ? pct(impulse, TUNING.springsPct) : impulse;
+  a.vx -= idiv(toA * nx, ma * TRIG_ONE);
+  a.vy -= idiv(toA * ny, ma * TRIG_ONE);
+  b.vx += idiv(toB * nx, mb * TRIG_ONE);
+  b.vy += idiv(toB * ny, mb * TRIG_ONE);
+
   if (aHits) markHit(b, a, tick);
   if (bHits) markHit(a, b, tick);
   if (impulse >= BUMP_EVENT_MIN) {
@@ -144,6 +168,10 @@ export function collide(a: PlayerState, b: PlayerState, tick: number, events: Ga
   if (impulse >= BUMP_EVENT_MIN) {
     if (aHits) a.bumps++;
     if (bHits) b.bumps++;
+    const cx = a.x + idiv(CAR_RADIUS * nx, TRIG_ONE);
+    const cy = a.y + idiv(CAR_RADIUS * ny, TRIG_ONE);
+    if (aHits) powerHit(a, b, cx, cy, events);
+    if (bHits) powerHit(b, a, cx, cy, events);
     events.push({
       type: 'bump',
       a: a.id,
@@ -155,7 +183,20 @@ export function collide(a: PlayerState, b: PlayerState, tick: number, events: Ga
   }
 }
 
-function markHit(victim: PlayerState, hitter: PlayerState, tick: number): void {
+/** What a real hit by `hitter` does with its power-up: Țuică passes on (reversed steering), springs go boing. */
+function powerHit(hitter: PlayerState, victim: PlayerState, x: number, y: number, events: GameEvent[]): void {
+  if (hitter.effect === PU_TUICA) {
+    victim.confusedTicks = TUNING.tuicaConfuseTicks;
+    hitter.effect = 0;
+    hitter.effectTicks = 0;
+    events.push({ type: 'confused', playerId: victim.id, byId: hitter.id });
+  } else if (hitter.effect === PU_SPRINGS) {
+    events.push({ type: 'spring', playerId: hitter.id, x, y });
+  }
+}
+
+/** Credit for a knockout within HIT_CREDIT_TICKS (a collision, the horn, someone's oil). */
+export function markHit(victim: PlayerState, hitter: PlayerState, tick: number): void {
   victim.lastHitBy = hitter.id;
   victim.lastHitTick = tick;
 }

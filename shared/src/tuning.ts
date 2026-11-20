@@ -7,13 +7,27 @@ import {
   FRICTION,
   GRIP,
   GRIP_HIT,
+  HORN_PUSH,
+  HORN_RADIUS,
+  LIFEBUOY_BOUNCE,
+  LIFEBUOY_TICKS,
   MAX_SPEED,
+  MICI_MASS_PCT,
+  MICI_SPEED_PCT,
+  MICI_TICKS,
+  OIL_GRIP,
+  OIL_RADIUS,
+  OIL_TICKS,
   RESTITUTION,
+  SPRINGS_PCT,
+  SPRINGS_TICKS,
+  TUICA_CONFUSE_TICKS,
+  TUICA_TICKS,
   TURN_MOVING,
   TURN_STILL,
 } from './constants';
 
-// The driving-feel constants physics.ts reads, gathered in one object so the local ?tune panel
+// The driving-feel and power-up constants the simulation reads, gathered in one object so the local ?tune panel
 // can change them live. Everything else (server, online clients, tests) keeps DEFAULT_TUNING:
 // client and server must step with identical numbers, so only a local game may touch TUNING.
 
@@ -30,6 +44,20 @@ export interface Tuning {
   boostAccel: number;
   boostMaxSpeed: number;
   boostMass: number;
+  hornRadius: number;
+  hornPush: number;
+  miciTicks: number;
+  miciMassPct: number;
+  miciSpeedPct: number;
+  lifebuoyTicks: number;
+  lifebuoyBounce: number;
+  oilTicks: number;
+  oilRadius: number;
+  oilGrip: number;
+  tuicaTicks: number;
+  tuicaConfuseTicks: number;
+  springsTicks: number;
+  springsPct: number;
 }
 
 export const DEFAULT_TUNING: Readonly<Tuning> = Object.freeze({
@@ -45,6 +73,20 @@ export const DEFAULT_TUNING: Readonly<Tuning> = Object.freeze({
   boostAccel: BOOST_ACCEL,
   boostMaxSpeed: BOOST_MAX_SPEED,
   boostMass: BOOST_MASS,
+  hornRadius: HORN_RADIUS,
+  hornPush: HORN_PUSH,
+  miciTicks: MICI_TICKS,
+  miciMassPct: MICI_MASS_PCT,
+  miciSpeedPct: MICI_SPEED_PCT,
+  lifebuoyTicks: LIFEBUOY_TICKS,
+  lifebuoyBounce: LIFEBUOY_BOUNCE,
+  oilTicks: OIL_TICKS,
+  oilRadius: OIL_RADIUS,
+  oilGrip: OIL_GRIP,
+  tuicaTicks: TUICA_TICKS,
+  tuicaConfuseTicks: TUICA_CONFUSE_TICKS,
+  springsTicks: SPRINGS_TICKS,
+  springsPct: SPRINGS_PCT,
 });
 
 /** Live values used by the simulation. Integers only. */

@@ -18,6 +18,7 @@ import {
 import { clamp, idiv } from './fixed';
 import { computeStandings, sortedPlayers, startRound } from './match';
 import { collide, driveCar, isOutside } from './physics';
+import { powerupsAfterCollide, powerupsBeforeDrive, rescue } from './powerups';
 import type { GameEvent, GameState, PlayerInput, PlayerState, RoundOutcome } from './types';
 
 /** Whole seconds left in the "3, 2, 1" countdown (0 once START has been shown). */
@@ -91,6 +92,7 @@ export function step(state: GameState): GameEvent[] {
   state.ringRadius = ringRadiusAt(state.roundTick);
 
   const racing = players.filter((p) => p.alive);
+  const oiled = powerupsBeforeDrive(state, players);
   for (const p of racing) {
     if (p.boostCooldown > 0) p.boostCooldown--;
     if (p.boostPressed) {
@@ -101,13 +103,14 @@ export function step(state: GameState): GameEvent[] {
         events.push({ type: 'boost', playerId: p.id });
       }
     }
-    driveCar(p);
+    driveCar(p, oiled.has(p.id));
   }
   for (let i = 0; i < racing.length; i++) {
     for (let j = i + 1; j < racing.length; j++) collide(racing[i]!, racing[j]!, state.tick, events);
   }
+  powerupsAfterCollide(state, players, events);
   for (const p of racing) {
-    if (isOutside(p, state.ringRadius)) eliminate(state, p, events);
+    if (isOutside(p, state.ringRadius) && !rescue(state, p, events)) eliminate(state, p, events);
   }
 
   if (fight >= ROUND_TIME_LIMIT_TICKS && state.phase === 'playing') endRound(state, 'timeout', events);

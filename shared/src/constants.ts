@@ -98,3 +98,57 @@ export const BOT_LEVELS: readonly number[] = [BOT_EASY, BOT_MEDIUM, BOT_HARD];
 export const DEFAULT_BOT_LEVEL = BOT_MEDIUM;
 
 export const BOT_NAMES: readonly string[] = ['Căluțul', 'Vată de Zahăr', 'Turtă Dulce', 'Clovnul', 'Scrânciobul', 'Lanțurile'];
+
+// Power-ups: they appear at random spots on the ring and are picked up by driving over them.
+// Kinds (GameState.puNKind, PlayerState.effect); 0 = none.
+export const PU_NONE = 0;
+/** Claxon de TIR: an instant shock wave that shoves every car around (counts as a hit). */
+export const PU_HORN = 1;
+/** Mici cu muștar: double mass, a bit slower, for a while. */
+export const PU_MICI = 2;
+/** Colac de salvare: the next fall off the ring is cancelled (the car bounces back toward the center). */
+export const PU_LIFEBUOY = 3;
+/** Ulei vărsat: a slippery puddle dropped behind the car. */
+export const PU_OIL = 4;
+/** Țuică de prună: the next car you hit gets reversed steering for a while. */
+export const PU_TUICA = 5;
+/** Bară cu arcuri: your hits shove twice as hard, for a while. */
+export const PU_SPRINGS = 6;
+export const POWERUP_KINDS: readonly number[] = [PU_HORN, PU_MICI, PU_LIFEBUOY, PU_OIL, PU_TUICA, PU_SPRINGS];
+/** Power-ups lying on the ring at once (state slots pu0*, pu1*). */
+export const POWERUP_SLOTS = 2;
+/** The first one appears this long after START... */
+export const POWERUP_FIRST_TICKS = 10 * TICK_RATE;
+/** ...then one every 8-14 s (fighting time). */
+export const POWERUP_MIN_GAP_TICKS = 8 * TICK_RATE;
+export const POWERUP_MAX_GAP_TICKS = 14 * TICK_RATE;
+/** Not picked up in this long: it vanishes. */
+export const POWERUP_LIFETIME_TICKS = 10 * TICK_RATE;
+/** The last stretch of its life, during which clients make it blink. */
+export const POWERUP_BLINK_TICKS = 2 * TICK_RATE;
+/** Pickup reach: a car's center within CAR_RADIUS + POWERUP_RADIUS of it. */
+export const POWERUP_RADIUS = 16 * FP;
+/** Never placed closer than this to the ring's edge... */
+export const POWERUP_EDGE_MARGIN = 3 * CAR_RADIUS;
+/** ...or to a car still on the ring, or than this to the other power-up. */
+export const POWERUP_CAR_CLEARANCE = 3 * CAR_RADIUS;
+export const POWERUP_SPACING = 4 * POWERUP_RADIUS;
+/** Random spots tried per spawn; when none is free, it tries again this many ticks later. */
+export const POWERUP_SPAWN_TRIES = 8;
+export const POWERUP_RETRY_TICKS = 10;
+
+// Power-up strengths and durations: the defaults of the TUNING values (tuning.ts, ?tune).
+export const HORN_RADIUS = 6 * CAR_RADIUS; // ~3 cars
+export const HORN_PUSH = 2600; // speed given to a car right next to the horn, less further away
+export const MICI_TICKS = 6 * TICK_RATE;
+export const MICI_MASS_PCT = 200;
+export const MICI_SPEED_PCT = 85;
+export const LIFEBUOY_TICKS = 10 * TICK_RATE;
+export const LIFEBUOY_BOUNCE = 1400; // speed toward the center after the rescue
+export const OIL_TICKS = 8 * TICK_RATE;
+export const OIL_RADIUS = 46 * FP;
+export const OIL_GRIP = 6; // sideways grip on the puddle (normal GRIP 130)
+export const TUICA_TICKS = 8 * TICK_RATE;
+export const TUICA_CONFUSE_TICKS = 4 * TICK_RATE;
+export const SPRINGS_TICKS = 5 * TICK_RATE;
+export const SPRINGS_PCT = 200;

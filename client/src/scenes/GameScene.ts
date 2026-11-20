@@ -5,7 +5,9 @@ import {
   BUMP_EVENT_MIN,
   FP,
   PLAYER_COLORS,
+  PU_HORN,
   TICK_RATE,
+  TUNING,
   applyGameTuning,
   computeStandings,
   countdownSeconds,
@@ -25,8 +27,11 @@ import type { GameTransport } from '../net/GameTransport';
 import type { RenderView } from '../net/view';
 import { Arena } from '../render/Arena';
 import { CarView } from '../render/CarView';
-import { bumpSparks, boostPuff, outBurst } from '../render/fx';
+import { playSfx } from '../audio/sfx';
+import { bumpSparks, boostPuff, outBurst, powerupSparkle, shockwave } from '../render/fx';
 import { Hud } from '../render/Hud';
+import { PowerupLayer } from '../render/PowerupLayer';
+import { hexColor, POWERUP_INFO } from '../render/powerupInfo';
 import { ARENA_CX, ARENA_CY, ARENA_R, DEPTH, FONT, GAME_H, GAME_W, HUD_X, SIDE_W, TOUCH_LAYOUT, toScreenX, toScreenY } from '../render/layout';
 import { ensureTextures } from '../render/textures';
 import { getSetting, reducedEffects, vibrate } from '../settings';
@@ -63,6 +68,7 @@ export class GameScene extends Phaser.Scene {
   private tune?: TunePanel;
   private unsubscribe?: () => void;
   private arena!: Arena;
+  private powerups!: PowerupLayer;
   private hud!: Hud;
   private connection!: ConnectionBanner;
   private pauseButton?: TextButton;
@@ -109,6 +115,7 @@ export class GameScene extends Phaser.Scene {
     const disarmFullscreen = fullscreenOnFirstTap();
     this.cameras.main.setBackgroundColor('#120a24');
     this.arena = new Arena(this);
+    this.powerups = new PowerupLayer(this);
     const leftHanded = isTouch && getSetting('leftHanded');
     this.hud = new Hud(this, leftHanded);
     // The fullscreen icon sits on the round-info side, away from the scores.
@@ -182,6 +189,7 @@ export class GameScene extends Phaser.Scene {
 
     this.view = this.transport.view();
     this.arena.update(time, this.view.ringRadius / FP);
+    this.powerups.update(state, time);
     this.syncCars(state, time);
     this.hud.update(state, this.transport.playerId);
     this.syncCountdown(state);
@@ -230,12 +238,58 @@ export class GameScene extends Phaser.Scene {
         if (pos) boostPuff(this, pos.x, pos.y, pos.angle);
       } else if (e.type === 'out') {
         this.onOut(state, e.playerId, e.byId);
+      } else if (e.type === 'powerupSpawn') {
+        powerupSparkle(this, toScreenX(e.x), toScreenY(e.y), POWERUP_INFO[e.kind]?.color ?? 0xffffff);
+      } else if (e.type === 'pickup') {
+        this.onPickup(e.playerId, e.kind);
+      } else if (e.type === 'horn') {
+        const near = this.nearMe(state, e.x, e.y, TUNING.hornRadius);
+        shockwave(this, toScreenX(e.x), toScreenY(e.y), TUNING.hornRadius / FP, POWERUP_INFO[PU_HORN]!.color);
+        playSfx('claxon', e.playerId === meId || near ? 1 : 0.6);
+        if (near && e.playerId !== meId) {
+          if (!reducedEffects()) this.cameras.main.shake(220, 0.01);
+          vibrate(90);
+        }
+      } else if (e.type === 'saved') {
+        this.shout(e.playerId, 'SALVAT!', '#7cf29a');
+        playSfx('colac', e.playerId === meId ? 1 : 0.6);
+        if (e.playerId === meId) vibrate(60);
+      } else if (e.type === 'confused') {
+        this.shout(e.playerId, 'HIC!', '#c77dff');
+        playSfx('sughit', e.playerId === meId || e.byId === meId ? 1 : 0.6);
+        if (e.playerId === meId) vibrate(70);
+      } else if (e.type === 'spring') {
+        playSfx('boing', e.playerId === meId ? 1 : 0.7);
       } else if (e.type === 'roundStart') {
         for (const car of this.cars.values()) car.reset();
       } else if (e.type === 'roundEnd' && e.winnerId === meId) {
         vibrate(80);
       }
     }
+  }
+
+  /** "CLAXON DE TIR!" over the car that drove over it, a glint and the pickup sound. */
+  private onPickup(playerId: string, kind: number): void {
+    const info = POWERUP_INFO[kind];
+    if (!info) return;
+    const mine = playerId === this.transport.playerId;
+    this.shout(playerId, info.shout, hexColor(info.color));
+    const pos = this.screenPos(playerId);
+    if (pos) powerupSparkle(this, pos.x, pos.y, info.color);
+    playSfx('ridicare', mine ? 1 : 0.5);
+    if (mine) vibrate(30);
+  }
+
+  /** Text floating up from over a car (where it is drawn). */
+  private shout(playerId: string, text: string, color: string): void {
+    const pos = this.screenPos(playerId);
+    if (pos) this.floatText(pos.x, pos.y - 44, text, color);
+  }
+
+  /** Whether this player's car (as drawn) is within `radius` sub-units of a point. */
+  private nearMe(state: Readonly<GameState>, x: number, y: number, radius: number): boolean {
+    const me = state.players[this.transport.playerId];
+    return !!me?.alive && Math.hypot(me.x - x, me.y - y) < radius;
   }
 
   private onOut(state: Readonly<GameState>, playerId: string, byId: string): void {

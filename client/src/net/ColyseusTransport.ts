@@ -386,6 +386,13 @@ export class ColyseusTransport implements GameTransport {
             boostTicks: predicted.boostTicks,
             boostCooldown: predicted.boostCooldown,
             slideTicks: predicted.slideTicks,
+            // Power-ups: a predicted pickup shows at once (a contested one is corrected by the server).
+            effect: predicted.effect,
+            effectTicks: predicted.effectTicks,
+            confusedTicks: predicted.confusedTicks,
+            oilX: predicted.oilX,
+            oilY: predicted.oilY,
+            oilTicks: predicted.oilTicks,
           },
         },
       };

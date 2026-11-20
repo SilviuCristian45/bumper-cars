@@ -1,7 +1,8 @@
-import { BOT_EASY, BOT_HARD, BOT_MEDIUM, FP, INPUT_MAX } from './constants';
+import { BOT_EASY, BOT_HARD, BOT_MEDIUM, CAR_RADIUS, FP, INPUT_MAX, PU_LIFEBUOY, PU_MICI, PU_OIL, PU_SPRINGS, PU_TUICA } from './constants';
 import { angleDiff, clamp, hash32, iatan2, icos, idiv, isin, isqrt, percent, TRIG_ONE } from './fixed';
 import { sortedPlayers } from './match';
 import { forwardSpeed } from './physics';
+import { livePowerups, type PowerupSlot } from './powerups';
 import { countdownSeconds } from './sim';
 import type { CarInput, GameState, PlayerState } from './types';
 
@@ -28,6 +29,12 @@ export interface BotParams {
   mistake: number;
   /** Random aim error, +- angle steps. */
   aimNoise: number;
+  /** Percent of decisions that go for a power-up within reach (the rest ignore it). */
+  pickupChance: number;
+  /** Power-ups further than this are ignored. */
+  pickupRange: number;
+  /** Chooses well: skips a power-up another car will reach first, steers right while confused. */
+  smart: boolean;
 }
 
 export const BOT_PARAMS: Record<number, BotParams> = {
@@ -41,6 +48,9 @@ export const BOT_PARAMS: Record<number, BotParams> = {
     boostAlign: 120,
     mistake: 22,
     aimNoise: 90,
+    pickupChance: 30,
+    pickupRange: 110 * FP,
+    smart: false,
   },
   [BOT_MEDIUM]: {
     interval: 4,
@@ -52,6 +62,9 @@ export const BOT_PARAMS: Record<number, BotParams> = {
     boostAlign: 60,
     mistake: 8,
     aimNoise: 40,
+    pickupChance: 65,
+    pickupRange: 180 * FP,
+    smart: false,
   },
   [BOT_HARD]: {
     interval: 4,
@@ -63,10 +76,13 @@ export const BOT_PARAMS: Record<number, BotParams> = {
     boostAlign: 30,
     mistake: 1,
     aimNoise: 8,
+    pickupChance: 90,
+    pickupRange: 260 * FP,
+    smart: true,
   },
 };
 
-export type BotIntent = 'wait' | 'retreat' | 'hunt' | 'cruise';
+export type BotIntent = 'wait' | 'retreat' | 'fetch' | 'hunt' | 'cruise';
 
 export interface BotThought {
   input: CarInput;
@@ -111,16 +127,27 @@ export function botThink(state: GameState, id: string): BotThought | null {
   const myR = radiusOf(me.x, me.y);
   // Outward speed: velocity along the direction from the center to the car.
   const outward = myR > 0 ? idiv(me.vx * me.x + me.vy * me.y, myR) : 0;
-  const danger = params.edgeMargin + Math.max(0, outward) * params.edgeLookahead;
+  // Colac de salvare: a fall would be forgiven, so it dares to fight much closer to the edge.
+  const brave = me.effect === PU_LIFEBUOY ? 2 : 1;
+  const danger = idiv(params.edgeMargin + Math.max(0, outward) * params.edgeLookahead, brave);
+  // Mici, springs or Țuică: built for hitting, so it always goes hunting and rams from further away.
+  const armed = me.effect === PU_MICI || me.effect === PU_SPRINGS || me.effect === PU_TUICA;
+  const aggression = armed ? 100 : params.aggression;
+  const boostRange = armed ? idiv(params.boostRange * 3, 2) : params.boostRange;
 
   let intent: BotIntent;
   let tx = 0;
   let ty = 0;
   let victim: PlayerState | undefined;
+  let item: PowerupSlot | undefined;
 
   if (ring - myR < danger) {
     intent = 'retreat';
-  } else if (roll(1) < params.aggression && (victim = pickVictim(state, me))) {
+  } else if (roll(4) < params.pickupChance && (item = pickPowerup(state, me, params, danger))) {
+    intent = 'fetch';
+    tx = item.x;
+    ty = item.y;
+  } else if (roll(1) < aggression && (victim = pickVictim(state, me))) {
     intent = 'hunt';
     tx = victim.x;
     ty = victim.y;
@@ -145,13 +172,15 @@ export function botThink(state: GameState, id: string): BotThought | null {
     if (throttle < 0) steer = 0;
   } else if (intent === 'cruise') {
     throttle = absErr > 256 ? 20 : 55;
+  } else if (intent === 'fetch') {
+    throttle = absErr > 256 ? 30 : 80;
   } else {
     throttle = absErr > 256 ? 30 : INPUT_MAX;
   }
 
   let boost = false;
   if (me.boostCooldown === 0 && absErr <= params.boostAlign) {
-    if (victim && intent === 'hunt') boost = distance(me, victim) <= params.boostRange;
+    if (victim && intent === 'hunt') boost = distance(me, victim) <= boostRange;
     else if (intent === 'retreat' && forwardSpeed(me) >= 0) boost = params.escapeBoost;
   }
 
@@ -162,7 +191,39 @@ export function botThink(state: GameState, id: string): BotThought | null {
     else boost = me.boostCooldown === 0;
   }
 
+  // Țuică turned its steering around: a smart bot steers the other way to make up for it.
+  if (me.confusedTicks > 0 && params.smart) steer = -steer;
+
   return { input: { seq: 0, steer, throttle, boost }, intent, targetX: tx, targetY: ty, victimId: victim?.id ?? '' };
+}
+
+/**
+ * The power-up worth driving to: within reach and not near the edge (never worth a fall). A smart
+ * bot also skips the ones another car is closer to, and oil it would have to drive through later.
+ */
+function pickPowerup(state: GameState, me: PlayerState, params: BotParams, danger: number): PowerupSlot | undefined {
+  let best: PowerupSlot | undefined;
+  let bestDist = params.pickupRange + 1;
+  for (const item of livePowerups(state)) {
+    if (radiusOf(item.x, item.y) > state.ringRadius - danger - 2 * CAR_RADIUS) continue;
+    const dx = item.x - me.x;
+    const dy = item.y - me.y;
+    const d = isqrt(dx * dx + dy * dy);
+    if (d >= bestDist) continue;
+    if (params.smart) {
+      if (item.kind === PU_OIL && me.effect !== 0) continue; // it already has something better going
+      const beaten = sortedPlayers(state).some((p) => {
+        if (!p.alive || p.id === me.id) return false;
+        const ox = item.x - p.x;
+        const oy = item.y - p.y;
+        return isqrt(ox * ox + oy * oy) + CAR_RADIUS < d;
+      });
+      if (beaten) continue;
+    }
+    best = item;
+    bestDist = d;
+  }
+  return best;
 }
 
 /** Whom to hunt: the nearest car still on the ring. */
