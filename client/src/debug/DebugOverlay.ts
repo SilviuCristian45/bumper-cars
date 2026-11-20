@@ -1,39 +1,13 @@
 import Phaser from 'phaser';
-import {
-  CAR_RADIUS,
-  carRadius,
-  FP,
-  TICK_RATE,
-  botThink,
-  countdownSeconds,
-  fightTicks,
-  forwardSpeed,
-  livePowerups,
-  POWERUP_RADIUS,
-  sortedPlayers,
-  TUNING,
-  type BotIntent,
-  type BotThought,
-  type GameState,
-} from '@masinute/shared';
+import { CAR_RADIUS, carRadius, FP, TICK_RATE, livePowerups, POWERUP_RADIUS, sortedPlayers, TUNING, type BotThought, type GameState } from '@masinute/shared';
 import type { NetStats } from '../net/GameTransport';
 import { ARENA_CX, ARENA_CY, ARENA_R, DEPTH, FONT, GAME_H, toScreenX, toScreenY } from '../render/layout';
 import { POWERUP_INFO } from '../render/powerupInfo';
+import { botThoughts, debugLines, INTENTS, thoughtLabel, VELOCITY_SCALE } from './debugInfo';
 
 // Enabled with ?debug: hitboxes, velocity and heading, each bot's intent and target, tick/FPS;
 // online also ping, the prediction error being smoothed out, unconfirmed inputs, big corrections.
-
-const INTENTS: Record<BotIntent, { label: string; color: number }> = {
-  wait: { label: 'așteaptă', color: 0xaaaaaa },
-  retreat: { label: 'fuge spre centru', color: 0x4cc9f0 },
-  flee: { label: 'fuge de uriaș', color: 0xb388ff },
-  fetch: { label: 'după power-up', color: 0xffd166 },
-  hunt: { label: 'vânează', color: 0xff4d6d },
-  cruise: { label: 'plimbare', color: 0x80ed99 },
-};
-
-/** Velocity vectors are drawn this many ticks long. */
-const VELOCITY_SCALE = 8;
+// The texts and the bots' thoughts come from debugInfo.ts (shared with the 3D client).
 
 export type ScreenPos = (playerId: string) => { x: number; y: number } | undefined;
 
@@ -59,15 +33,9 @@ export class DebugOverlay {
   }
 
   update(state: Readonly<GameState>, meId: string, fps: number, paused: boolean, screenPos: ScreenPos, net?: NetStats): void {
-    // Bot thinking is pure, so it can be recomputed here from any state (local or remote).
     if (state.tick !== this.lastTick) {
       this.lastTick = state.tick;
-      this.thoughts = new Map();
-      for (const p of sortedPlayers(state)) {
-        if (!p.isBot) continue;
-        const t = botThink(state as GameState, p.id);
-        if (t) this.thoughts.set(p.id, t);
-      }
+      this.thoughts = botThoughts(state);
     }
 
     const g = this.gfx;
@@ -112,36 +80,13 @@ export class DebugOverlay {
       g.lineBetween(pos.x, pos.y, toScreenX(thought.targetX), toScreenY(thought.targetY));
       g.fillStyle(intent.color, 0.8);
       g.fillCircle(toScreenX(thought.targetX), toScreenY(thought.targetY), 3);
-      const i = thought.input;
-      this.label(p.id, used).setText(`${intent.label} s${i.steer} t${i.throttle}${i.boost ? ' B' : ''}`).setPosition(pos.x, pos.y + 26).setColor(
+      this.label(p.id, used).setText(thoughtLabel(thought)).setPosition(pos.x, pos.y + 26).setColor(
         '#' + intent.color.toString(16).padStart(6, '0'),
       );
     }
     for (const [id, text] of this.labels) text.setVisible(used.has(id));
 
-    const me = state.players[meId];
-    const lines = [
-      `tick ${state.tick}  round tick ${state.roundTick}  fight ${(fightTicks(state.roundTick) / TICK_RATE).toFixed(1)}s  countdown ${countdownSeconds(state.roundTick)}`,
-      `fps ${fps.toFixed(0)}  ring ${(state.ringRadius / FP).toFixed(0)} px  phase ${state.phase}${paused ? ' (pauză)' : ''}`,
-    ];
-    if (me) {
-      const speed = Math.hypot(me.vx, me.vy);
-      lines.push(
-        `eu: viteză ${((speed * TICK_RATE) / FP).toFixed(0)} px/s (înainte ${((forwardSpeed(me) * TICK_RATE) / FP).toFixed(0)})  steer ${me.steer} throttle ${me.throttle}  boost ${me.boostTicks}/${me.boostCooldown}  alunecare ${me.slideTicks}  seq ${me.lastSeq}`,
-      );
-    }
-    lines.push(
-      state.powerups
-        ? `power-ups: următorul în ${(state.puTimer / TICK_RATE).toFixed(1)}s  pe ring ${livePowerups(state).length}/2${me?.effect ? `  eu: ${POWERUP_INFO[me.effect]?.name} ${(me.effectTicks / TICK_RATE).toFixed(1)}s` : ''}${me?.confusedTicks ? `  amețit ${(me.confusedTicks / TICK_RATE).toFixed(1)}s` : ''}`
-        : 'power-ups: oprite',
-    );
-    if (net) {
-      const sim = net.lagMs || net.jitterMs ? `  (simulat +${net.lagMs}±${net.jitterMs} ms)` : '';
-      lines.push(
-        `net: ping ${net.pingMs} ms${sim}  eroare predicție ${net.predictionErrorPx.toFixed(1)} px  neconfirmate ${net.unconfirmed}  corecții mari ${net.bigCorrectionsPerSecond}/s`,
-      );
-    }
-    this.info.setText(lines.join('\n'));
+    this.info.setText(debugLines(state, meId, fps, paused, net).join('\n'));
   }
 
   private label(id: string, used: Set<string>): Phaser.GameObjects.Text {

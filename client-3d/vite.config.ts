@@ -4,6 +4,8 @@ import { defineConfig } from 'vite';
 // 3D client: served under /3d/, reuses the 2D client's screens, networking and touch controls through @client.
 export default defineConfig({
   base: '/3d/',
+  // The 2D client's public files: the replaceable sounds (audio/), icons, manifest.
+  publicDir: '../client/public',
   resolve: {
     alias: { '@client': fileURLToPath(new URL('../client/src', import.meta.url)) },
   },

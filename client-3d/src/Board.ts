@@ -33,6 +33,12 @@ export class Board {
     }
   }
 
+  /** Hidden under the podium at the end of the match. */
+  setVisible(visible: boolean): void {
+    this.cars.group.visible = visible;
+    this.powerups.group.visible = visible;
+  }
+
   dispose(): void {
     this.world.scene.remove(this.cars.group, this.powerups.group);
     this.cars.dispose();

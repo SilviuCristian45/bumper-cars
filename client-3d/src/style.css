@@ -157,13 +157,6 @@
   left: calc(var(--sal) + 10px);
 }
 
-.hud-records {
-  font-size: 18px;
-  font-weight: bold;
-  color: var(--yellow);
-  margin-top: 8px;
-}
-
 .perf {
   position: fixed;
   z-index: 30;
@@ -186,4 +179,144 @@ body.touch .hud-scores {
 
 body.touch .hud-center {
   top: 26%;
+}
+
+/* End of the match: the table and awards next to the 3D podium (Podium3D). */
+.podium-panel {
+  position: fixed;
+  z-index: 12;
+  top: calc(var(--sat) + 46px);
+  /* Left of the Cameră / Ieși buttons, which stay usable after the match. */
+  right: calc(var(--sar) + 130px);
+  width: min(440px, 46vw);
+  max-height: calc(100% - var(--sat) - var(--sab) - 72px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 14px 18px;
+  border-radius: 12px;
+  background: rgba(18, 10, 36, 0.86);
+  border: 2px solid rgba(91, 61, 143, 0.9);
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.5s, transform 0.5s;
+  pointer-events: none;
+}
+
+.podium-panel.shown {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+.podium-panel h2 {
+  margin: 0 0 6px;
+  color: var(--yellow);
+  font-size: 26px;
+}
+
+.podium-records {
+  margin: 0 0 8px;
+  color: var(--yellow);
+  font-weight: bold;
+}
+
+.podium-records:empty {
+  display: none;
+}
+
+.podium-records.note {
+  color: var(--muted);
+  font-weight: normal;
+}
+
+.podium-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+}
+
+.podium-table th {
+  color: var(--muted);
+  font-weight: normal;
+  font-size: 13px;
+  text-align: left;
+  padding: 2px 4px;
+}
+
+.podium-table td {
+  padding: 3px 4px;
+  font-weight: bold;
+}
+
+.podium-table td.num,
+.podium-table th:nth-child(n + 3) {
+  text-align: right;
+}
+
+.podium-awards {
+  margin-top: 10px;
+  font-size: 14px;
+}
+
+.podium-awards .label {
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.podium-awards .award b {
+  color: var(--yellow);
+  margin-right: 6px;
+}
+
+.podium-panel .btn {
+  margin-top: 12px;
+  width: 100%;
+}
+
+.podium-wait {
+  margin: 12px 0 0;
+  color: var(--muted);
+}
+
+/* Phones held sideways: a narrower, denser panel, clear of the fullscreen icon. */
+body.touch .podium-panel {
+  width: min(380px, 50vw);
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+body.touch .podium-panel h2 {
+  font-size: 20px;
+}
+
+/* ?debug (Debug3D): the info lines bottom left, labels over the floor. */
+.debug-info {
+  position: fixed;
+  z-index: 31;
+  left: calc(var(--sal) + 8px);
+  bottom: calc(var(--sab) + 8px);
+  white-space: pre;
+  font: 12px/1.35 Consolas, Menlo, monospace;
+  color: #00ff9c;
+  background: rgba(0, 0, 0, 0.67);
+  padding: 2px 4px;
+  pointer-events: none;
+}
+
+.debug-labels {
+  position: fixed;
+  inset: 0;
+  z-index: 11;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.debug-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  white-space: nowrap;
+  font: 11px var(--font);
+  background: rgba(0, 0, 0, 0.67);
+  padding: 1px 2px;
 }

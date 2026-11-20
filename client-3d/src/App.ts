@@ -7,6 +7,7 @@ import { MenuScreen } from '@client/screens/menu';
 import { showName } from '@client/screens/name';
 import { mountHtmlScreen, type Lifetime } from '@client/ui/html';
 import { openSettings } from '@client/ui/settingsDialog';
+import { debug } from '@client/urlOptions';
 import { carAvatar } from './avatars';
 import { Demo } from './Demo';
 import { Match } from './Match';
@@ -77,7 +78,7 @@ export class App {
 
     if (route.to === 'game') {
       this.stopDemo();
-      this.match = new Match(this.world, this.life, route.transport, { newMatch: this.opts.newMatch, go: (r) => this.go(r) });
+      this.match = new Match(this.world, this.life, route.transport, { newMatch: this.opts.newMatch, debug, go: (r) => this.go(r) });
       return;
     }
     this.shownMs = 0;
@@ -113,8 +114,8 @@ export class App {
       isActive: () => !life.ended,
       mount: (className, children) => mountHtmlScreen(life, className, children),
       avatarUrl: carAvatar,
-      openSettings: () => openSettings({ music: false, extra: settingsRows((q) => this.setQuality(q)) }),
-      cornerToggles: ['reducedEffects'],
+      openSettings: () => openSettings({ extra: settingsRows((q) => this.setQuality(q)) }),
+      cornerToggles: ['music', 'reducedEffects'],
       settingsOnDesktop: true,
     };
   }
@@ -184,6 +185,7 @@ export class App {
       // The lobby may have switched to the game just now.
       if (!this.match) this.updateDemo(dtMs);
     }
+    this.world.update(dtMs / 1000);
     this.world.render(dtMs / 1000);
     this.perfOverlay?.frame(gap, performance.now() - workStart);
   }

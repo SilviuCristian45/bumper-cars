@@ -3,7 +3,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { MAX_SPEED, PLAYER_COLORS, RING_RADIUS, type PlayerState } from '@masinute/shared';
 import type { Pose } from '@client/net/view';
 import type { Quality } from './settings3d';
-import { ease, headingToYaw, speedToWorld, toWorld } from './coords';
+import { ease, headingToYaw, LOST_DROP, speedToWorld, toWorld } from './coords';
 
 /** Where the antenna leaves the car, in the car's own frame (x forward, z to the right, unscaled). */
 export const ANTENNA_BASE = new THREE.Vector3(-14, 36, 0);
@@ -15,6 +15,9 @@ const HOP_GRAVITY = 700;
 const FALL_GRAVITY = 900;
 /** After this long the fallen car is out of sight (fog) and hidden. */
 const FALL_SECONDS = 1.4;
+/** In the lost floor: a moment on it, then sinking through (world units per second). */
+const SINK_DELAY = 0.45;
+const SINK_SPEED = 70;
 /** Leaning into a turn at full steer and full speed, radians. */
 const MAX_LEAN = 0.2;
 
@@ -22,7 +25,7 @@ const MAX_LEAN = 0.2;
  * One low-poly bumper car merged into a single geometry with vertex colors (one draw call):
  * rubber bumper, body in the player's color, hood, seat, driver, antenna mount. Faces +x.
  */
-function carGeometry(color: number, quality: Quality): THREE.BufferGeometry {
+export function carGeometry(color: number, quality: Quality): THREE.BufferGeometry {
   const seg = quality === 'high' ? 20 : 12;
   const body = new THREE.Color(color);
   const hood = body.clone().lerp(new THREE.Color(0xffffff), 0.25);
@@ -63,6 +66,8 @@ interface Fall {
   vy: number;
   vz: number;
   spin: THREE.Vector3;
+  /** When it landed in the lost floor (ring shrunk under it), -1 while falling. */
+  landedAt: number;
 }
 
 /** A car on screen: follows the blended pose, leans in turns, hops when hit, falls off the edge when out. */
@@ -178,7 +183,7 @@ export class CarView {
       vz += ((90 - out) * z) / r;
     }
     const spin = new THREE.Vector3(vz, 0, -vx).normalize().multiplyScalar(4);
-    this.fall = { t: 0, x, y: this.hop, z, vx, vy: 40, vz, spin };
+    this.fall = { t: 0, x, y: this.hop, z, vx, vy: 40, vz, spin, landedAt: -1 };
   }
 
   private updateFall(dt: number): void {
@@ -187,12 +192,26 @@ export class CarView {
     f.x += f.vx * dt;
     f.z += f.vz * dt;
     // Rolls on the floor until past the platform's edge, then drops.
-    const onPlatform = Math.hypot(f.x, f.z) < toWorld(RING_RADIUS) && f.y >= 0 && f.t < 0.15;
-    if (!onPlatform) {
+    const r = Math.hypot(f.x, f.z);
+    const onPlatform = r < toWorld(RING_RADIUS) && f.y >= 0 && f.t < 0.15;
+    if (f.landedAt < 0 && !onPlatform) {
       f.vy -= FALL_GRAVITY * dt;
       f.y += f.vy * dt;
       this.body.rotation.x += f.spin.x * dt;
       this.body.rotation.z += f.spin.z * dt;
+      // Out because the ring shrank: the car drops into the lost floor's trench instead of the void...
+      if (r < toWorld(RING_RADIUS) - 2 && f.y <= -LOST_DROP) {
+        f.y = -LOST_DROP;
+        f.landedAt = f.t;
+      }
+    }
+    if (f.landedAt >= 0) {
+      // ...skids to a stop there and sinks through it.
+      const k = Math.exp(-4 * dt);
+      f.vx *= k;
+      f.vz *= k;
+      const sinking = f.t - f.landedAt - SINK_DELAY;
+      if (sinking > 0) f.y = -LOST_DROP - sinking * SINK_SPEED;
     }
     this.root.position.set(f.x, f.y, f.z);
     this.body.position.y = 0;

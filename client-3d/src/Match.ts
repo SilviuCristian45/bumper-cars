@@ -1,4 +1,4 @@
-import { applyGameTuning, type GameEvent, type GameState, type NewRecord } from '@masinute/shared';
+import { applyGameTuning, type GameEvent, type GameState } from '@masinute/shared';
 import { keepScreenOn } from '@client/device-apis';
 import { isTouch } from '@client/device';
 import { CombinedInput } from '@client/input/CombinedInput';
@@ -16,14 +16,19 @@ import { button, dialogOpen, isTyping, type Lifetime } from '@client/ui/html';
 import { requireLandscape } from '@client/ui/orientation';
 import { notifyPresence } from '@client/ui/presence';
 import { Board } from './Board';
+import { Debug3D } from './Debug3D';
 import { Hud } from './Hud';
 import { KeyboardInput } from './KeyboardInput';
+import { MatchSounds } from './MatchSounds';
+import { Podium3D } from './Podium3D';
 import { getCameraMode } from './settings3d';
 import type { World } from './World';
 
 export interface MatchOptions {
   /** Test URL options: after the match, Enter (or a tap) starts a new local one instead of going back to the lobby. */
   newMatch?: () => GameTransport;
+  /** ?debug: hitboxes, vectors, bot intents, the info lines (Debug3D). */
+  debug?: boolean;
   go(route: Route): void;
 }
 
@@ -34,6 +39,7 @@ export interface MatchOptions {
 export class Match {
   private board: Board;
   private readonly hud: Hud;
+  private readonly sounds: MatchSounds;
   private readonly controls: InputSource;
   private readonly touch: TouchInput | null;
   private readonly pauseButton: HTMLButtonElement | null;
@@ -44,8 +50,8 @@ export class Match {
   private confirm: Dialog | undefined;
   /** The leave dialog paused the offline match, so closing it resumes. */
   private confirmPaused = false;
-  private recordsShown: readonly NewRecord[] | null = null;
-  private recordsLine = '';
+  private podium: Podium3D | null = null;
+  private readonly debug: Debug3D | null;
   private done = false;
 
   constructor(
@@ -63,6 +69,9 @@ export class Match {
 
     this.board = new Board(world, transport.playerId);
     this.hud = new Hud(transport.playerId, !isTouch);
+    this.sounds = new MatchSounds(transport.playerId);
+    this.debug = opts.debug ? new Debug3D() : null;
+    if (this.debug) world.scene.add(this.debug.lines);
     const leftHanded = isTouch && getSetting('leftHanded');
     document.body.classList.toggle('chrome-left', leftHanded);
     const keyboard = new KeyboardInput();
@@ -107,7 +116,12 @@ export class Match {
       this.unsubscribe();
       this.controls.destroy();
       this.hud.dispose();
+      this.removePodium();
       this.board.dispose();
+      if (this.debug) {
+        this.world.scene.remove(this.debug.lines);
+        this.debug.dispose();
+      }
     });
   }
 
@@ -119,7 +133,12 @@ export class Match {
   /** The world was rebuilt (quality changed). */
   attach(world: World): void {
     const mode = this.world.rig.mode;
+    this.removePodium();
     this.board.dispose();
+    if (this.debug) {
+      this.world.scene.remove(this.debug.lines);
+      world.scene.add(this.debug.lines);
+    }
     this.world = world;
     world.rig.setMode(mode);
     this.board = new Board(world, this.transport.playerId);
@@ -155,8 +174,12 @@ export class Match {
     if (this.events.length > 0) {
       this.board.onEvents(this.events, state);
       this.hud.onEvents(this.events);
+      const own = this.board.cars.carOf(t.playerId);
+      const listener = own && me?.alive && !own.falling ? own.root.position : this.world.rig.look;
+      this.sounds.onEvents(this.events, state, listener, this.world.rig.camera);
       this.events = [];
     }
+    this.sounds.update(state);
     const dt = dtMs / 1000;
     this.board.update(state, this.view, dt);
     this.board.cars.showOwnLabel = this.world.rig.mode === 'tilted';
@@ -164,34 +187,39 @@ export class Match {
     const follow = car && me?.alive && !car.falling ? { x: car.root.position.x, z: car.root.position.z, yaw: car.root.rotation.y } : null;
     this.world.rig.update(dt, follow);
     this.world.arena.setNetFromBelow(this.world.rig.mode === 'chase' && !!follow);
-    this.hud.update(state, dt, t.isPaused(), this.finishedHint(state), this.records(state));
+    this.syncPodium(state, dt);
+    this.debug?.update(state, this.view, t.playerId, dtMs, t.isPaused(), this.world.rig.camera, t.netStats?.());
+    this.hud.update(state, dt, t.isPaused());
     this.touch?.setBoostReady(this.hud.boostReady(state));
   }
 
-  private finishedHint(state: Readonly<GameState>): string {
-    const tap = isTouch ? 'Atinge ecranul' : 'Enter';
-    if (this.opts.newMatch) return `${tap} pentru încă un meci`;
-    if (state.hostId === this.transport.playerId) return `${tap}: înapoi în lobby`;
-    return 'Așteaptă ca hostul să revină în lobby.';
+  /** The podium takes over the ring once the match is over (the fanfare comes from MatchSounds). */
+  private syncPodium(state: Readonly<GameState>, dt: number): void {
+    const finished = state.phase === 'finished';
+    if (!finished) {
+      if (this.podium) this.removePodium();
+      return;
+    }
+    if (!this.podium) {
+      this.podium = new Podium3D(state, this.world.quality, {
+        me: this.transport.playerId,
+        online: this.transport.online,
+        testMatch: !!this.opts.newMatch,
+        onContinue: () => this.onContinue(),
+      });
+      this.world.scene.add(this.podium.group);
+      this.board.setVisible(false);
+    }
+    this.podium.update(state, this.transport.newRecords(), dt);
+    this.world.rig.podium(dt);
   }
 
-  /** "Ai intrat în top!" / "Record nou!" once the server has saved the match; offline, a note that it does not count. */
-  private records(state: Readonly<GameState>): string {
-    if (state.phase !== 'finished') return '';
-    if (!this.transport.online) return this.opts.newMatch ? '' : 'Meciurile offline nu intră în clasament.';
-    const records = this.transport.newRecords();
-    if (records === this.recordsShown) return this.recordsLine;
-    this.recordsShown = records;
-    const me = this.transport.playerId;
-    const parts = [...records]
-      .sort((a, b) => Number(b.playerId === me) - Number(a.playerId === me) || a.place - b.place)
-      .map((r) =>
-        r.playerId === me
-          ? `${r.kind === 'top' ? 'Ai intrat în top!' : 'Record nou!'} Locul ${r.place}`
-          : `${r.name}: ${r.kind === 'top' ? 'a intrat în top' : 'record nou'}, locul ${r.place}`,
-      );
-    this.recordsLine = parts.length > 0 ? `★ ${parts.join('  ·  ')} ★` : '';
-    return this.recordsLine;
+  private removePodium(): void {
+    if (!this.podium) return;
+    this.world.scene.remove(this.podium.group);
+    this.podium.dispose();
+    this.podium = null;
+    this.board.setVisible(true);
   }
 
   private togglePause(): void {

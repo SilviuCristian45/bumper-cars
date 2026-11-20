@@ -27,7 +27,8 @@ export class CameraRig {
   readonly camera: THREE.PerspectiveCamera;
   mode: CameraMode = 'tilted';
   private readonly target = new THREE.Vector3();
-  private readonly look = new THREE.Vector3();
+  /** Where the camera looks (on the floor): the listener for sounds when the own car is out. */
+  readonly look = new THREE.Vector3();
   private readonly goal = new THREE.Vector3();
   private yaw = 0;
   private shake = 0;
@@ -62,6 +63,14 @@ export class CameraRig {
   screenHeading(carHeading: number): number {
     this.camera.getWorldDirection(this.dir);
     return joystickHeading(carHeading, directionToHeading(this.dir.x, this.dir.z));
+  }
+
+  /** The end of the match: in front of the podium in the middle of the ring, swaying slowly. */
+  podium(dt: number): void {
+    this.time += dt;
+    this.camera.position.set(Math.sin(this.time * 0.25) * 90, 120, 270);
+    this.camera.lookAt(0, 48, 0);
+    this.snapped = false;
   }
 
   /** Behind the menus: circles the ring slowly, a little higher than in the game. */

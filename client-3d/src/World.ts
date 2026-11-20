@@ -6,6 +6,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { RING_RADIUS } from '@masinute/shared';
 import { Arena } from './Arena';
 import { CameraRig } from './CameraRig';
+import { Scenery } from './Scenery';
 import type { Quality } from './settings3d';
 import { toWorld } from './coords';
 
@@ -20,6 +21,7 @@ export class World {
   readonly scene = new THREE.Scene();
   readonly rig: CameraRig;
   readonly arena: Arena;
+  readonly scenery: Scenery;
   private readonly composer: EffectComposer | null = null;
   private readonly onResize = () => this.resize();
 
@@ -55,6 +57,8 @@ export class World {
     this.rig = new CameraRig(1);
     this.arena = new Arena(quality);
     this.scene.add(this.arena.group);
+    this.scenery = new Scenery(quality);
+    this.scene.add(this.scenery.group);
 
     if (high) {
       this.composer = new EffectComposer(this.renderer);
@@ -64,6 +68,11 @@ export class World {
     }
     this.resize();
     window.addEventListener('resize', this.onResize);
+  }
+
+  /** What moves on its own (the wheel, the garlands), every frame. */
+  update(dt: number): void {
+    this.scenery.update(dt);
   }
 
   render(dt: number): void {

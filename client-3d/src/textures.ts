@@ -36,6 +36,31 @@ export function diamondPlate(size: number): THREE.CanvasTexture {
   return tex;
 }
 
+/** Dark red and black hazard stripes for the floor lost to the shrinking ring. */
+export function hazardStripes(size: number): THREE.CanvasTexture {
+  const [c, g] = canvas(size);
+  g.fillStyle = '#16091d';
+  g.fillRect(0, 0, size, size);
+  g.fillStyle = '#4a1022';
+  // Two diagonal bands per tile, drawn three times so they wrap seamlessly.
+  for (let k = -1; k <= 1; k++) {
+    for (const start of [0, 0.5]) {
+      const x0 = (start + k) * size;
+      g.beginPath();
+      g.moveTo(x0, size);
+      g.lineTo(x0 + size * 0.25, size);
+      g.lineTo(x0 + size * 1.25, 0);
+      g.lineTo(x0 + size, 0);
+      g.closePath();
+      g.fill();
+    }
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 /** Soft white dot for sparks and glows (additive blending). */
 export function glowDot(size = 64): THREE.CanvasTexture {
   const [c, g] = canvas(size);

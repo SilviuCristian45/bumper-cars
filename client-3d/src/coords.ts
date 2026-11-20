@@ -7,6 +7,8 @@ import { ANGLE_STEPS, FP, TICK_RATE, wrapAngle } from '@masinute/shared';
 export const CEILING_Y = 150;
 /** Thickness of the ring's platform (the cars fall off its edge). */
 export const PLATFORM_DEPTH = 18;
+/** How far the floor lost to the shrinking ring sits below the live one (a step down at its edge). */
+export const LOST_DROP = 8;
 
 export const toWorld = (sub: number): number => sub / FP;
 

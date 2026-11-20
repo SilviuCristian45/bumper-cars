@@ -12,6 +12,7 @@ import { trackVisualViewport } from '@client/ui/html';
 import { initRotatePrompt } from '@client/ui/orientation';
 import { debug, params, quickStart } from '@client/urlOptions';
 import { App } from './App';
+import { initAudio } from './audio3d';
 import { localOptions } from './options';
 
 // The 3D client: the 2D game's menus, lobby and networking (client/src), the ring drawn with Three.js.
@@ -33,8 +34,8 @@ if (isTouch) {
     if (!(e.target instanceof HTMLInputElement)) e.preventDefault();
   });
 }
-// Fullscreen icon (no sound in the 3D client yet, so no mute button), the rotate prompt, the phone keyboard.
-initChrome();
+// The sound and fullscreen icons, the rotate prompt, the phone keyboard.
+initChrome(initAudio());
 initRotatePrompt();
 trackVisualViewport();
 

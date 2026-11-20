@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { RING_RADIUS } from '@masinute/shared';
 import type { Quality } from './settings3d';
-import { diamondPlate } from './textures';
-import { CEILING_Y, PLATFORM_DEPTH, toWorld } from './coords';
+import { diamondPlate, hazardStripes } from './textures';
+import { CEILING_Y, LOST_DROP, PLATFORM_DEPTH, toWorld } from './coords';
 
 const R = toWorld(RING_RADIUS);
 const RIM_TUBE = 9;
@@ -10,7 +10,8 @@ const BULB_COLORS = [0xffd166, 0xff4d6d, 0x4cc9f0, 0x95f9a5, 0xffa8f0];
 
 /**
  * The ring: a steel platform with a rubber rim, chasing bulbs on the rim (unlit instanced spheres,
- * no real lights), the ceiling net the antennas touch, and the lost floor once the ring shrinks.
+ * no real lights), the ceiling net the antennas touch. The live floor is a slab LOST_DROP thick: once the
+ * ring shrinks, the floor lost around it is a step lower, striped like a hazard, and the slab's edge glows.
  */
 export class Arena {
   readonly group = new THREE.Group();
@@ -18,6 +19,8 @@ export class Arena {
   private readonly plate: THREE.Texture;
   private lastRadius = -1;
   private readonly edge: THREE.Mesh;
+  private readonly wall: THREE.MeshBasicMaterial;
+  private clock = 0;
   private readonly bulbs: THREE.InstancedMesh;
   private readonly bulbCount: number;
   private readonly net: THREE.LineSegments;
@@ -29,16 +32,18 @@ export class Arena {
     const high = quality === 'high';
     const segments = high ? 96 : 56;
 
-    // Platform: dark (lost) floor on top, the live floor disk sits just above it.
+    // Platform: its top is the lost floor (hazard stripes), a step below the live floor.
+    const hazard = hazardStripes(high ? 128 : 64);
+    hazard.repeat.set(R / 20, R / 20);
     const platform = new THREE.Mesh(
       new THREE.CylinderGeometry(R + RIM_TUBE, R + RIM_TUBE + 4, PLATFORM_DEPTH, segments, 1),
       [
         new THREE.MeshLambertMaterial({ color: 0x2a1838 }), // side
-        new THREE.MeshLambertMaterial({ color: 0x1b1024 }), // top: the lost floor
+        new THREE.MeshLambertMaterial({ map: hazard, color: 0x9a8aa8 }), // top: the lost floor
         new THREE.MeshLambertMaterial({ color: 0x1b1024 }),
       ],
     );
-    platform.position.y = -PLATFORM_DEPTH / 2;
+    platform.position.y = -LOST_DROP - PLATFORM_DEPTH / 2;
     platform.receiveShadow = high;
     this.group.add(platform);
 
@@ -48,10 +53,11 @@ export class Arena {
     const floorMat = high
       ? new THREE.MeshStandardMaterial({ map: plate, metalness: 0.55, roughness: 0.45, color: 0xcfcbe0 })
       : new THREE.MeshLambertMaterial({ map: plate, color: 0xcfcbe0 });
-    this.liveFloor = new THREE.Mesh(new THREE.CircleGeometry(1, segments), floorMat);
-    this.liveFloor.rotation.x = -Math.PI / 2;
-    this.liveFloor.position.y = 0.2;
-    this.liveFloor.scale.setScalar(R);
+    // The live floor: a slab (unit radius, scaled to the ring) whose glowing edge is the step down.
+    this.wall = new THREE.MeshBasicMaterial({ color: 0x5a1020 });
+    this.liveFloor = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, LOST_DROP + 0.2, segments, 1), [this.wall, floorMat, this.wall]);
+    this.liveFloor.position.y = 0.2 - (LOST_DROP + 0.2) / 2;
+    this.liveFloor.scale.set(R, 1, R);
     this.liveFloor.receiveShadow = high;
     this.group.add(this.liveFloor);
 
@@ -105,13 +111,17 @@ export class Arena {
     const r = toWorld(ringRadius);
     if (r !== this.lastRadius) {
       this.lastRadius = r;
-      this.liveFloor.scale.setScalar(r);
-      // The disk's UVs span its diameter: keep one plate tile 48 units wide and fixed in the world as it shrinks.
+      this.liveFloor.scale.set(r, 1, r);
+      // The top's UVs span its diameter: keep one plate tile 48 units wide and fixed in the world as it shrinks.
       this.plate.repeat.set(r / 24, r / 24);
       this.plate.offset.set(-r / 48, -r / 48);
       this.edge.visible = r < R - 0.5;
       if (this.edge.visible) this.edge.scale.setScalar(r);
     }
+
+    // The step's edge pulses red while the ring is closing in.
+    this.clock += dt;
+    if (this.edge.visible) this.wall.color.setRGB(0.35 + 0.3 * Math.sin(this.clock * 6), 0.03, 0.08);
 
     // Chasing bulbs: every third one bright, stepping 6 times a second (only a color update).
     this.bulbClock += dt;
