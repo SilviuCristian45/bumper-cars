@@ -22,6 +22,7 @@ import {
 import type { DriveInput } from '../input/InputSource';
 import type { ConnectionStatus, GameTransport, NetStats, RoomMessage } from './GameTransport';
 import { LagLine, type NetSimOptions } from './LagLine';
+import { retryReconnectionNow } from './sdkReconnect';
 import { isRoundReset, lerpPose, poseOf, type Pose, type RenderView } from './view';
 
 // Plays an authoritative Colyseus room. The server sends one state patch per tick (decoded by the
@@ -368,26 +369,9 @@ export class ColyseusTransport implements GameTransport {
     // Ping now; the dead-connection check counts from here (no pongs came while hidden in the lobby).
     this.lastHeardAt = now;
     this.nextPingAt = 0;
-    if (this.status === 'reconnecting') this.retryNow();
-  }
-
-  /**
-   * The SDK's own retries back off up to 5 s and ran on while the page was hidden (and its timers were
-   * throttled): without this, a player coming back could wait seconds with a frozen game. Reaches into
-   * the SDK (no public API for it); if that changes, its normal schedule still applies.
-   */
-  private retryNow(): void {
-    const room = this.room as unknown as {
-      retryTimeout?: ReturnType<typeof setTimeout>;
-      retryReconnection?: () => void;
-      reconnection: { retryCount: number; isReconnecting: boolean };
-      connection: { transport?: { ws?: WebSocket } };
-    };
-    if (typeof room.retryReconnection !== 'function' || !room.reconnection.isReconnecting) return;
-    room.reconnection.retryCount = 0; // a fresh set of attempts from now on
-    if (room.connection.transport?.ws?.readyState === WebSocket.CONNECTING) return; // an attempt is under way
-    clearTimeout(room.retryTimeout);
-    room.retryReconnection();
+    // The SDK's own retries back off up to 5 s and ran on while the page was hidden (with throttled
+    // timers): without this, a player coming back could wait seconds with a frozen game.
+    if (this.status === 'reconnecting') retryReconnectionNow(this.room);
   }
 
   private ownPose(): Pose | null {

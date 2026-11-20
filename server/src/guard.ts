@@ -56,6 +56,7 @@ export function installGuard(server: Server, options: GuardOptions = DEFAULT_GUA
   >;
   const sockets = new Counts();
   let lastWarning = -Infinity;
+  let loggedFirst = false;
 
   /** The request's limit key, written to IP_HEADER for the rooms; null (and a warning now and then) when not through Caddy. */
   const identify = (req: IncomingMessage): string | null => {
@@ -73,6 +74,11 @@ export function installGuard(server: Server, options: GuardOptions = DEFAULT_GUA
     }
     const key = ipKey(ip);
     req.headers[IP_HEADER] = key;
+    if (!loggedFirst) {
+      // Once per process, so the journal shows which address the limits really count by (last part hidden).
+      loggedFirst = true;
+      console.log(`Limite per IP active: primul client prin Caddy numărat ca ${maskKey(key)} (din X-Forwarded-For).`);
+    }
     return key;
   };
 
@@ -138,6 +144,11 @@ export function installGuard(server: Server, options: GuardOptions = DEFAULT_GUA
   });
 
   return { sockets };
+}
+
+/** A limit key for the log: an IPv4 address without its last number (an IPv6 key is already only its /64). */
+export function maskKey(key: string): string {
+  return /^\d+\.\d+\.\d+\.\d+$/.test(key) ? key.replace(/\.\d+$/, '.x') : key;
 }
 
 /** decodeURIComponent that never throws (a malformed %-escape is just an unknown code). */

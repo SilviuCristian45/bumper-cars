@@ -12,7 +12,7 @@
     "og": "node assets-src/icons.mjs"
   },
   "dependencies": {
-    "@colyseus/sdk": "^0.18.10",
+    "@colyseus/sdk": "0.18.10",
     "@masinute/shared": "0.1.0",
     "phaser": "3.90.0"
   },
