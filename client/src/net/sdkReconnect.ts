@@ -8,8 +8,9 @@
 interface RoomInternals {
   retryTimeout?: ReturnType<typeof setTimeout>;
   retryReconnection?: () => void;
+  reconnectionToken?: unknown;
   reconnection?: { retryCount?: unknown; isReconnecting?: unknown };
-  connection?: { transport?: { ws?: { readyState?: unknown } } };
+  connection?: { reconnect?: unknown; transport?: { ws?: { readyState?: unknown } } };
 }
 
 /** WebSocket.CONNECTING, without needing a WebSocket global. */
@@ -22,8 +23,10 @@ export function hasReconnectInternals(room: unknown): boolean {
 }
 
 /**
- * While the SDK is reconnecting: a fresh set of attempts, the next one now (unless one is under way).
- * Returns whether it intervened; never throws.
+ * While the SDK is reconnecting: a fresh set of attempts, the first one started right here (unless one
+ * is under way). Synchronously, not through a timer: Chrome holds back the timers of a page that has
+ * just come back from the background (its background budget), so even the SDK's shortest pause
+ * (0.2 s) could turn into seconds with the game frozen. Returns whether it intervened; never throws.
  */
 export function retryReconnectionNow(room: unknown): boolean {
   try {
@@ -33,7 +36,20 @@ export function retryReconnectionNow(room: unknown): boolean {
     r.reconnection.retryCount = 0;
     if (r.connection?.transport?.ws?.readyState === CONNECTING) return false; // an attempt is under way
     clearTimeout(r.retryTimeout);
-    r.retryReconnection();
+    const reconnect = r.connection?.reconnect;
+    const token = typeof r.reconnectionToken === 'string' ? r.reconnectionToken.split(':')[1] : undefined;
+    if (typeof reconnect !== 'function' || !token) {
+      r.retryReconnection(); // the SDK's own next attempt, after its shortest pause
+      return true;
+    }
+    // What the SDK's retry timer does when it fires (Room.retryReconnection); a failure lands in the
+    // SDK's onclose, which schedules the next attempt as usual.
+    r.reconnection.retryCount = 1;
+    try {
+      reconnect.call(r.connection, { reconnectionToken: token, skipHandshake: true });
+    } catch {
+      r.retryReconnection();
+    }
     return true;
   } catch {
     return false; // the SDK's own schedule goes on
