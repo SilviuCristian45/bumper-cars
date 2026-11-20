@@ -104,7 +104,8 @@ Ce face un deploy:
 5. pe server: despachetează într-o versiune nouă, mută `current.prev` pe versiunea activă și comută
    `current` pe cea nouă printr-o singură redenumire de symlink (serverul și clientul se schimbă împreună),
    apoi repornește `masinute` și așteaptă `http://127.0.0.1:2568/health`;
-6. de pe Windows verifică `https://masinute-balci.duckdns.org/colyseus/health`.
+6. de pe Windows verifică drumul public prin Caddy, `https://masinute-balci.duckdns.org/colyseus/leaderboard`
+   (`/colyseus/health` răspunde 404 din afară: e doar pentru scripturile de pe VPS).
 
 Dacă oricare health check pică, revine automat la versiunea anterioară: versiunea nouă e ștearsă și
 `current.prev` rămâne cum era. Pe server se păstrează versiunea activă, cea anterioară și încă trei.
@@ -113,6 +114,30 @@ Un restart pierde room-urile în curs (jucătorii văd „Conexiunea cu serverul
 când nu se joacă nimeni. După o modificare a lui `masinute.service` sau a backup-ului, copiază din nou `deploy/`
 (pașii 1 și 2 de la prima instalare) și rulează `setup.sh` (`push.ps1` nu instalează unit-uri și nu atinge
 `~/masinute-deploy`, deci copia de acolo e cea de la ultimul `setup.sh`).
+
+## Modificări ale blocului din Caddy
+
+`setup.sh` adaugă blocul doar dacă lipsește. Pentru a-l schimba după prima instalare (header-e de securitate,
+CSP etc.), `caddy-update.sh` înlocuiește doar blocul `masinute-balci.duckdns.org` din `/etc/caddy/Caddyfile`:
+validează Caddyfile-ul de acum și pe cel nou înainte să scrie, face o copie `Caddyfile.bak-<data>`, dă
+`systemctl reload caddy` (fără restart) și verifică Bombe, trenul și jocul; dacă ceva nu mai răspunde ca înainte,
+pune copia înapoi.
+
+```powershell
+# 1. deploy/ actualizat pe server (ca la prima instalare), din rădăcina repo-ului
+ssh oracle "rm -rf ~/masinute-deploy"
+scp -r deploy oracle:masinute-deploy
+ssh oracle "chmod 755 ~/masinute-deploy && chmod 644 ~/masinute-deploy/*"
+# 2. diferența și validarea, fără să scrie nimic
+ssh -t oracle "sudo bash ~/masinute-deploy/caddy-update.sh --dry-run"
+# 3. aplicarea
+ssh -t oracle "sudo bash ~/masinute-deploy/caddy-update.sh"
+```
+
+Revenire manuală: `sudo cp -a /etc/caddy/Caddyfile.bak-<data> /etc/caddy/Caddyfile && sudo systemctl reload caddy`.
+CSP-ul e întâi `Content-Security-Policy-Report-Only`: încălcările ajung în jurnalul serverului
+(`ssh oracle "journalctl -u masinute --no-pager | grep CSP:"`). Când nu mai apar, numele header-ului din
+`deploy/Caddyfile` devine `Content-Security-Policy` și se rulează din nou pașii de mai sus.
 
 ## Clasamentul
 

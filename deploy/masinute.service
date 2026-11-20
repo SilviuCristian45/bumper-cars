@@ -38,6 +38,26 @@ ProtectKernelModules=true
 ProtectControlGroups=true
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 LockPersonality=true
+# More (SECURITY-AUDIT.md, m5). Network only to/from loopback: Caddy connects from 127.0.0.1 and the
+# server never needs to reach out, so even a compromised process could not send data anywhere.
+IPAddressDeny=any
+IPAddressAllow=localhost
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectProc=invisible
+ProtectHostname=true
+ProtectClock=true
+ProtectKernelLogs=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RemoveIPC=true
+SystemCallArchitectures=native
+# A system call outside the usual service set fails with EPERM instead of killing Node.
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+UMask=0077
+# Not MemoryDenyWriteExecute: V8's JIT needs writable+executable memory.
 
 [Install]
 WantedBy=multi-user.target

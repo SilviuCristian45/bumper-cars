@@ -3,7 +3,7 @@
   rulează local testele, typecheck-ul și build-ul de producție; pune server/dist/index.js și client/dist
   într-o singură arhivă .tar.gz; o copiază cu scp; pe server o despachetează într-o versiune nouă și comută
   atomic pe ea (versiunea anterioară rămâne ca current.prev); repornește serviciul masinute și verifică
-  /health pe server și public. Dacă health check-ul pică, revine automat la versiunea anterioară.
+  /health pe server și calea publică prin Caddy (/colyseus/leaderboard). Dacă health check-ul pică, revine automat la versiunea anterioară.
   Nu conține parole sau chei.
   Exemple:
     .\deploy\push.ps1                                       # alias "oracle" din ~/.ssh/config (utilizator, cheie, port de acolo)
@@ -21,7 +21,8 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-$publicHealth = 'https://masinute-balci.duckdns.org/colyseus/health'
+# Public path through Caddy to the server (Caddy answers 404 to /colyseus/health from outside).
+$publicHealth = 'https://masinute-balci.duckdns.org/colyseus/leaderboard'
 $remoteDir = '/tmp/masinute-push'
 $work = Join-Path $env:TEMP 'masinute-push'
 $tar = Join-Path $env:SystemRoot 'System32\tar.exe'   # bsdtar din Windows 10+
@@ -64,7 +65,7 @@ function Test-PublicHealth {
   for ($i = 1; $i -le 10; $i++) {
     try {
       $res = Invoke-WebRequest -Uri $publicHealth -UseBasicParsing -TimeoutSec 5
-      if ($res.StatusCode -eq 200 -and $res.Content -match '"ok"\s*:\s*true') {
+      if ($res.StatusCode -eq 200 -and $res.Content -match '"available"\s*:') {
         Write-Host $res.Content
         return $true
       }

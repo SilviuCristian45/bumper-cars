@@ -1,12 +1,33 @@
 # Site block for Mașinuțe de Bâlci. Not a whole Caddyfile: deploy/setup.sh appends it to
-# /etc/caddy/Caddyfile only if the domain is not there yet; the other sites stay untouched.
+# /etc/caddy/Caddyfile only if the domain is not there yet, deploy/caddy-update.sh replaces it in
+# place later; the other sites stay untouched.
 masinute-balci.duckdns.org {
 	encode zstd gzip
 
+	# Security headers (SECURITY-AUDIT.md, D3). The CSP starts as Report-Only: browsers report what it
+	# would block to /colyseus/csp-report (written to the server's journal) and block nothing yet.
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "DENY"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+		Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' wss://masinute-balci.duckdns.org; font-src 'self'; manifest-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; report-uri /colyseus/csp-report"
+		-Server
+	}
+
 	# Colyseus: HTTP matchmaking and the WebSocket upgrade both go through here.
-	# handle_path strips /colyseus, so the server sees /matchmake/..., /health, /rooms/<code>, /<process>/<room>.
+	# handle_path strips /colyseus, so the server sees /matchmake/..., /rooms/<code>, /leaderboard, /<process>/<room>.
 	handle_path /colyseus/* {
-		reverse_proxy 127.0.0.1:2568
+		# Health and version are for the deploy scripts on the VPS (they ask 127.0.0.1:2568 directly).
+		@internal path / /health /__healthcheck
+		respond @internal 404
+		reverse_proxy 127.0.0.1:2568 {
+			# The server takes the client's address from X-Forwarded-For (the entry Caddy adds). These two
+			# would otherwise pass through as the client sent them; Colyseus' own context.ip trusts them.
+			header_up X-Real-IP {remote_host}
+			header_up -X-Client-IP
+		}
 	}
 
 	# The client build. /var/www/masinute -> /opt/masinute/current/client (switched atomically on deploy).
