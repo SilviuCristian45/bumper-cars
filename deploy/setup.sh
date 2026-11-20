@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Prima instalare Mașinuțe de Bâlci pe VPS (Ubuntu). Rulează pe server, din folderul deploy/ copiat acolo:
-#   sudo bash /tmp/masinute-deploy/setup.sh
+#   sudo bash ~/masinute-deploy/setup.sh      (folderul stă în /home/ubuntu/masinute-deploy)
 # Idempotent: îl poți rula de mai multe ori. Atinge doar ce ține de mașinuțe (user-ul masinute,
 # /opt/masinute, /var/www/masinute, /var/lib/masinute, masinute.service, masinute-backup.{service,timer},
 # /usr/local/sbin/masinute-backup și blocul masinute-balci.duckdns.org din Caddyfile).

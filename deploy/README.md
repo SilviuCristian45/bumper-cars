@@ -21,6 +21,7 @@ Nu e nevoie de Docker, Redis sau module native: serverul e un singur fișier `in
 Fișiere:
 
 - `setup.sh`: instalarea inițială, pe VPS (o singură dată; poate fi rulat din nou fără efecte nedorite);
+  pe server folderul `deploy/` stă în `/home/ubuntu/masinute-deploy` (copia de la ultima instalare);
 - `push.ps1`: actualizare de pe Windows (teste, typecheck, build, upload, comutare atomică, health check, rollback);
 - `remote-update.sh`: partea de pe server a lui `push.ps1` (o urcă și o rulează el);
 - `masinute.service`, `Caddyfile`: unit-ul systemd și blocul Caddy, instalate de `setup.sh`;
@@ -42,12 +43,14 @@ Fișiere:
 Din PowerShell, în rădăcina repo-ului:
 
 ```powershell
-# 1. copiază folderul deploy/ pe server
-ssh oracle "rm -rf /tmp/masinute-deploy"
-scp -r deploy oracle:/tmp/masinute-deploy
+# 1. copiază folderul deploy/ pe server, în /home/ubuntu/masinute-deploy (rămâne acolo)
+ssh oracle "rm -rf ~/masinute-deploy"
+scp -r deploy oracle:masinute-deploy
+# scp de pe Windows lasă folderul scriibil de oricine; setup.sh rulează cu sudo, deci doar ubuntu scrie aici
+ssh oracle "chmod 755 ~/masinute-deploy && chmod 644 ~/masinute-deploy/*"
 
-# 2. instalarea (user, directoare, systemd, Caddy)
-ssh -t oracle "sudo bash /tmp/masinute-deploy/setup.sh"
+# 2. instalarea (user, directoare, systemd, backup, Caddy)
+ssh -t oracle "sudo bash ~/masinute-deploy/setup.sh"
 
 # 3. prima versiune: build, upload, pornește serviciul, health check
 .\deploy\push.ps1
@@ -108,7 +111,8 @@ Dacă oricare health check pică, revine automat la versiunea anterioară: versi
 
 Un restart pierde room-urile în curs (jucătorii văd „Conexiunea cu serverul s-a pierdut”), deci actualizează
 când nu se joacă nimeni. După o modificare a lui `masinute.service` sau a backup-ului, copiază din nou `deploy/`
-și rulează `setup.sh` (`push.ps1` nu instalează unit-uri).
+(pașii 1 și 2 de la prima instalare) și rulează `setup.sh` (`push.ps1` nu instalează unit-uri și nu atinge
+`~/masinute-deploy`, deci copia de acolo e cea de la ultimul `setup.sh`).
 
 ## Clasamentul
 
