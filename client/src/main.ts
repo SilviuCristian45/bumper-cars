@@ -17,9 +17,11 @@ import { LeaderboardScene } from './scenes/LeaderboardScene';
 import { LobbyScene } from './scenes/LobbyScene';
 import { MenuScene, type MenuSceneData } from './scenes/MenuScene';
 import { NameScene } from './scenes/NameScene';
+import { load } from './storage';
 import { initChrome } from './ui/chrome';
 import { trackVisualViewport } from './ui/dom';
 import { initRotatePrompt } from './ui/orientation';
+import { takeSwitchArrival } from './ui/otherClient';
 import { debug, params, quickPowerupFreq, quickPowerups, quickStart as quick } from './urlOptions';
 
 // Test URL options skip the intro and menu and start a local match at once:
@@ -62,7 +64,9 @@ function menuData(): MenuSceneData {
 // another room skips it too, and the menu asks whether to leave the current game for it.
 const startup = quick ? startupRoute(null, undefined) : startupRoute(resumableRoomCode(), menuData().invite);
 const resume = startup.kind !== 'normal';
-const resumeData: MenuSceneData = startup.kind === 'switch' ? { invite: startup.to, switchFrom: startup.from } : { resume: true };
+// From the 3D client's "Înapoi la 2D": straight to the menu (the nickname is already known).
+const switched = takeSwitchArrival() && !quick && !resume && !!load('name')?.trim();
+const menuStart: MenuSceneData = startup.kind === 'switch' ? { invite: startup.to, switchFrom: startup.from } : resume ? { resume: true } : menuData();
 
 // Phones: no long-press menu (the CSS already stops selection and the callout); text fields keep theirs.
 if (isTouch) {
@@ -91,9 +95,9 @@ initMusic(phaserAudioOut(game));
 initChrome({ isMuted, toggle: () => toggleMute(game) });
 initRotatePrompt();
 trackVisualViewport();
-game.scene.add('intro', IntroScene, !quick && !resume, menuData());
+game.scene.add('intro', IntroScene, !quick && !resume && !switched, menuData());
 game.scene.add('name', NameScene);
-game.scene.add('menu', MenuScene, resume, resumeData);
+game.scene.add('menu', MenuScene, resume || switched, menuStart);
 game.scene.add('leaderboard', LeaderboardScene);
 game.scene.add('lobby', LobbyScene);
 game.scene.add('game', GameScene, quick, quick ? quickStart() : undefined);

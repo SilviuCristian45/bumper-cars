@@ -9,6 +9,7 @@ import { openDialog } from '../ui/dialog';
 import { el } from '../ui/el';
 import { button, setButtonStyle, title } from '../ui/html';
 import { installHint } from '../ui/installHint';
+import { otherClientButton } from '../ui/otherClient';
 import type { MenuData, ScreenHost } from './host';
 
 const CORNER_LABELS = { music: 'Muzică', reducedEffects: 'Efecte reduse' } as const;
@@ -41,6 +42,7 @@ export class MenuScreen {
         leaderboardButton,
         this.offlineButton,
         settings ? button('Setări', () => host.openSettings(), 'secondary', 'small') : null,
+        otherClientButton(host.otherClient, opts.invite),
       ]),
       isTouch ? null : this.cornerToggles(),
       installHint(),

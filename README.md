@@ -116,10 +116,12 @@ Pentru jocul online: `?lag=120&jitter=30` simulează o rețea lentă (120 ms în
 pe fiecare mesaj), iar `?online` păstrează meniurile ca `?debug` să arate și ping-ul, eroarea de predicție,
 inputurile neconfirmate și corecțiile mari pe secundă (de exemplu `?online&debug&lag=120&jitter=30`).
 
-## Varianta 3D (branch `3d`)
+## Varianta 3D (la `/3d/`)
 
 Aceleași meniuri, același lobby și aceleași camere ca jocul 2D: un jucător 2D și unul 3D intră cu același cod și joacă
-împreună. Pornește `npm run dev` (server + 2D) și `npm run dev:3d` → http://localhost:5175/3d/ (de pe telefon:
+împreună. În meniul 2D, „Încearcă în 3D” deschide varianta 3D (cu aceeași poreclă și aceleași setări); în 3D, „Înapoi
+la 2D” face drumul invers. Pe un dispozitiv pe care 3D-ul merge sub 40 de cadre pe secundă la prima pornire, jocul
+sugerează o dată varianta 2D. Pornește `npm run dev` (server + 2D) și `npm run dev:3d` → http://localhost:5175/3d/ (de pe telefon:
 `http://<IP-ul PC-ului>:5175/3d/`). Linkul de invitație dintr-un lobby 3D duce la `/3d/?room=COD`.
 
 Are sunetele și muzica din 2D (aceleași fișiere înlocuibile din `client/public/audio/`, cu sunet mai încet departe de

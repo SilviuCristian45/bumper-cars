@@ -18,6 +18,7 @@ export function phaserHost(scene: Phaser.Scene): ScreenHost {
     openSettings: () => openSettings(),
     cornerToggles: ['music', 'reducedEffects'],
     settingsOnDesktop: false,
+    otherClient: '3d',
   };
 }
 

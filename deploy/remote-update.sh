@@ -5,7 +5,7 @@
 #            if the server does not come up healthy, switch back to the previous release
 #   rollback switch back to the previous release (current.prev), restart, health check
 #
-# Layout: /opt/masinute/releases/<id>/{server/index.js,client/,VERSION}
+# Layout: /opt/masinute/releases/<id>/{server/index.js,client/,client/3d/,VERSION}
 #         /opt/masinute/current      -> the active release   (masinute.service runs current/server/index.js)
 #         /opt/masinute/current.prev -> the one before it
 #         /var/www/masinute          -> /opt/masinute/current/client (served by Caddy)
@@ -70,7 +70,7 @@ deploy() {
   sudo tar -xzf "$archive" -C "$new" --no-same-owner --no-same-permissions || { sudo rm -rf "$new"; die "Arhiva nu s-a putut despacheta."; }
   sudo chown -R root:root "$new"
   sudo chmod -R u=rwX,go=rX "$new"
-  [ -f "$new/server/index.js" ] && [ -f "$new/client/index.html" ] || { sudo rm -rf "$new"; die "Arhiva nu conține server/index.js și client/index.html"; }
+  [ -f "$new/server/index.js" ] && [ -f "$new/client/index.html" ] && [ -f "$new/client/3d/index.html" ] || { sudo rm -rf "$new"; die "Arhiva nu conține server/index.js, client/index.html și client/3d/index.html"; }
 
   old="$(readlink "$CURRENT" 2>/dev/null || true)"
   oldprev="$(readlink "$PREVIOUS" 2>/dev/null || true)"

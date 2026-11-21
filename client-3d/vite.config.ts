@@ -1,9 +1,18 @@
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 
+/** Public address of the game, for the link preview's absolute URLs (as in the 2D client's vite.config.ts). */
+const SITE_URL = (process.env.SITE_URL ?? 'https://masinute-balci.duckdns.org').replace(/\/$/, '');
+
 // 3D client: served under /3d/, reuses the 2D client's screens, networking and touch controls through @client.
 export default defineConfig({
   base: '/3d/',
+  plugins: [
+    {
+      name: 'site-url',
+      transformIndexHtml: (html) => html.replaceAll('%SITE_URL%', SITE_URL),
+    },
+  ],
   // The 2D client's public files: the replaceable sounds (audio/), icons, manifest.
   publicDir: '../client/public',
   resolve: {

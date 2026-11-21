@@ -7,9 +7,11 @@ import { LocalTransport } from '@client/net/LocalTransport';
 import { startupRoute } from '@client/net/resume';
 import { resumableRoomCode } from '@client/net/rooms';
 import type { MenuData } from '@client/screens/host';
+import { load } from '@client/storage';
 import { initChrome } from '@client/ui/chrome';
 import { trackVisualViewport } from '@client/ui/html';
 import { initRotatePrompt } from '@client/ui/orientation';
+import { takeSwitchArrival } from '@client/ui/otherClient';
 import { debug, params, quickStart } from '@client/urlOptions';
 import { App } from './App';
 import { initAudio } from './audio3d';
@@ -39,6 +41,7 @@ initChrome(initAudio());
 initRotatePrompt();
 trackVisualViewport();
 
+const switched = takeSwitchArrival();
 const newMatch = () => new LocalTransport(localOptions());
 const app = new App(quickStart ? { newMatch } : {});
 // ?debug: the router for scripted browser tests, shaped like the 2D client's window.__game.
@@ -52,5 +55,7 @@ if (quickStart) {
   const startup = startupRoute(resumableRoomCode(), menuData().invite);
   if (startup.kind === 'switch') app.go({ to: 'menu', data: { invite: startup.to, switchFrom: startup.from } });
   else if (startup.kind === 'resume') app.go({ to: 'menu', data: { resume: true } });
+  // From the 2D menu's "Încearcă în 3D": straight to the menu (the nickname is already known).
+  else if (switched && load('name')?.trim()) app.go({ to: 'menu', data: menuData() });
   else app.go({ to: 'intro', data: menuData() });
 }

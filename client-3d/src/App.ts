@@ -5,7 +5,7 @@ import { showLeaderboard } from '@client/screens/leaderboard';
 import { LobbyScreen } from '@client/screens/lobby';
 import { MenuScreen } from '@client/screens/menu';
 import { showName } from '@client/screens/name';
-import { mountHtmlScreen, type Lifetime } from '@client/ui/html';
+import { dialogOpen, mountHtmlScreen, type Lifetime } from '@client/ui/html';
 import { openSettings } from '@client/ui/settingsDialog';
 import { debug } from '@client/urlOptions';
 import { carAvatar } from './avatars';
@@ -14,6 +14,8 @@ import { Match } from './Match';
 import { perf } from './options';
 import { PerfOverlay } from './PerfOverlay';
 import { getQuality, settingsRows, type Quality } from './settings3d';
+import { SlowDeviceCheck } from './SlowDeviceCheck';
+import { suggest2d } from './suggest2d';
 import { World } from './World';
 
 type RouteKey = Route['to'];
@@ -57,10 +59,13 @@ export class App {
   /** How long the current menu-like route has been shown (the demo starts only once one stays a moment). */
   private shownMs = 0;
   private perfOverlay: PerfOverlay | null = null;
+  /** Not in the test mode (local matches one after another, no menus). */
+  private readonly slowCheck: SlowDeviceCheck | null;
   private last = performance.now();
 
   constructor(private readonly opts: AppOptions = {}) {
     this.stage = document.getElementById('stage')!;
+    this.slowCheck = opts.newMatch ? null : new SlowDeviceCheck(suggest2d);
     this.world = new World(getQuality(), this.stage);
     this.world.renderer.setAnimationLoop((now: number) => this.frame(now));
     this.createPerf();
@@ -117,6 +122,7 @@ export class App {
       openSettings: () => openSettings({ extra: settingsRows((q) => this.setQuality(q)) }),
       cornerToggles: ['music', 'reducedEffects'],
       settingsOnDesktop: true,
+      otherClient: '2d',
     };
   }
 
@@ -188,5 +194,6 @@ export class App {
     this.world.update(dtMs / 1000);
     this.world.render(dtMs / 1000);
     this.perfOverlay?.frame(gap, performance.now() - workStart);
+    this.slowCheck?.frame(gap, !this.match && !dialogOpen());
   }
 }

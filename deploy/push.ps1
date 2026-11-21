@@ -1,6 +1,6 @@
 ﻿<#
   Actualizează Mașinuțe de Bâlci pe VPS, de pe Windows:
-  rulează local testele, typecheck-ul și build-ul de producție; pune server/dist/index.js și client/dist
+  rulează local testele, typecheck-ul și build-ul de producție; pune server/dist/index.js, client/dist și client-3d/dist (servit la /3d/)
   într-o singură arhivă .tar.gz; o copiază cu scp; pe server o despachetează într-o versiune nouă și comută
   atomic pe ea (versiunea anterioară rămâne ca current.prev); repornește serviciul masinute și verifică
   /health pe server și calea publică prin Caddy (/colyseus/leaderboard). Dacă health check-ul pică, revine automat la versiunea anterioară.
@@ -103,7 +103,7 @@ try {
     Show-Command 'npm run build'
     Invoke-Checked 'npm run build' { npm.cmd run build }
 
-    Step 'Arhivez server/dist/index.js și client/dist'
+    Step 'Arhivez server/dist/index.js, client/dist și client-3d/dist'
     $stage = Join-Path $work 'release'
     if (Test-Path $stage) { Remove-Item -Recurse -Force $stage -WhatIf:$false }
     New-Item -ItemType Directory -Force -Path (Join-Path $stage 'server') -WhatIf:$false | Out-Null
@@ -111,6 +111,9 @@ try {
     # Stack traces in journalctl point at the TypeScript sources (NODE_OPTIONS=--enable-source-maps).
     if (Test-Path 'server\dist\index.js.map') { Copy-Item 'server\dist\index.js.map' (Join-Path $stage 'server\index.js.map') -WhatIf:$false }
     Copy-Item 'client\dist' (Join-Path $stage 'client') -Recurse -WhatIf:$false
+    # The 3D client is built with base /3d/: it lives in the 2D client's folder, under 3d/.
+    if (Test-Path (Join-Path $stage 'client\3d')) { throw 'client/dist conține deja un folder 3d' }
+    Copy-Item 'client-3d\dist' (Join-Path $stage 'client\3d') -Recurse -WhatIf:$false
     $version = "$(git rev-parse --short HEAD)$(if ($dirty.Count -gt 0) { '-dirty' }) $(Get-Date -Format 'yyyy-MM-dd HH:mm')"
     [IO.File]::WriteAllText((Join-Path $stage 'VERSION'), "$version`n", (New-Object Text.UTF8Encoding $false))
     $archive = Join-Path $work 'release.tar.gz'

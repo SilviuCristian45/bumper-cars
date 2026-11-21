@@ -1,6 +1,7 @@
 import type { GameTransport } from '../net/GameTransport';
 import type { Child } from '../ui/el';
 import type { Lifetime } from '../ui/html';
+import type { ClientKind } from '../ui/otherClient';
 
 // The HTML screens (intro, name, menu, leaderboard, lobby) are shared by the 2D client (inside Phaser
 // scenes) and the 3D one; whatever differs between the two goes through a ScreenHost.
@@ -44,4 +45,6 @@ export interface ScreenHost {
   readonly cornerToggles: readonly ('music' | 'reducedEffects')[];
   /** "Setări" in the menu and lobby on desktops too (otherwise touch devices only). */
   readonly settingsOnDesktop: boolean;
+  /** The menu's button to the other client ("Încearcă în 3D" / "Înapoi la 2D"). */
+  readonly otherClient: ClientKind;
 }
