@@ -1,3 +1,5 @@
+import { load, save } from '../storage';
+import { el } from './el';
 import { button } from './html';
 
 // "Încearcă în 3D" in the 2D menu, "Înapoi la 2D" in the 3D one. Both clients live on the same origin
@@ -7,6 +9,8 @@ import { button } from './html';
 export type ClientKind = '2d' | '3d';
 
 const ARRIVAL_KEY = 'masinute.switched';
+/** The 2D menu's "Nou: 3D" banner: gone once the player tried the 3D client or closed it. */
+const NEWS_KEY = 'news3d';
 
 const PATHS: Record<ClientKind, string> = { '2d': '/', '3d': '/3d/' };
 // Dev and preview run the two clients on their own ports (other origins, so no shared localStorage there).
@@ -26,7 +30,25 @@ export function otherClientButton(to: ClientKind, invite?: string): HTMLButtonEl
   return button(to === '3d' ? 'Încearcă în 3D' : 'Înapoi la 2D', () => goToOtherClient(to, invite), 'secondary', 'small');
 }
 
+/** The 2D menu's announcement of the 3D client, or null once it has done its job. */
+export function news3dBanner(invite?: string): HTMLElement | null {
+  if (load(NEWS_KEY) !== null) return null;
+  const close = el('button', { class: 'news-close', text: '×', attrs: { type: 'button', 'aria-label': 'Închide' } });
+  const banner = el('div', { class: 'news-3d' }, [
+    el('span', { class: 'news-badge', text: 'NOU' }),
+    el('p', { text: 'Mașinuțele au acum și variantă 3D. Aceleași coduri: joci împreună cu prietenii din 2D.' }),
+    button('Încearcă în 3D', () => goToOtherClient('3d', invite), 'primary', 'small'),
+    close,
+  ]);
+  close.addEventListener('click', () => {
+    save(NEWS_KEY, 'closed');
+    banner.remove();
+  });
+  return banner;
+}
+
 export function goToOtherClient(to: ClientKind, invite?: string): void {
+  if (to === '3d') save(NEWS_KEY, 'tried');
   try {
     window.sessionStorage.setItem(ARRIVAL_KEY, '1');
   } catch {

@@ -9,7 +9,7 @@ import { openDialog } from '../ui/dialog';
 import { el } from '../ui/el';
 import { button, setButtonStyle, title } from '../ui/html';
 import { installHint } from '../ui/installHint';
-import { otherClientButton } from '../ui/otherClient';
+import { news3dBanner, otherClientButton } from '../ui/otherClient';
 import type { MenuData, ScreenHost } from './host';
 
 const CORNER_LABELS = { music: 'Muzică', reducedEffects: 'Efecte reduse' } as const;
@@ -35,6 +35,7 @@ export class MenuScreen {
     host.mount('menu', [
       title(true),
       this.playingAs(),
+      host.otherClient === '3d' ? news3dBanner(opts.invite) : null,
       el('div', { class: 'cards' }, [this.createCreateCard(), this.createJoinCard()]),
       this.status,
       // One row, so a phone held sideways sees all of it ("Setări" only on touch devices, unless the host wants it).

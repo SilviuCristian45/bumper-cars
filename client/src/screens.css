@@ -373,6 +373,55 @@
   margin-top: 16px;
 }
 
+/* "NOU": the 2D menu's announcement of the 3D client. */
+.news-3d {
+  box-sizing: border-box;
+  margin-top: 16px;
+  width: 830px;
+  max-width: 100%;
+  padding: 8px 10px 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--panel);
+  border: 2px solid var(--yellow);
+  border-radius: 12px;
+  box-shadow: 0 0 18px rgba(255, 209, 102, 0.35);
+  text-align: left;
+}
+
+.news-3d p {
+  margin: 0;
+  flex: 1;
+  font-size: 15px;
+  color: var(--text-soft);
+}
+
+.news-badge {
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--red);
+  color: #fff;
+  font-size: 13px;
+  font-weight: bold;
+  letter-spacing: 1px;
+}
+
+.news-close {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 22px;
+  line-height: 1;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+
+.news-close:hover {
+  color: var(--text);
+}
+
 .menu-footer {
   margin-top: 12px;
   display: flex;
@@ -452,6 +501,14 @@
   }
   .menu .status {
     margin-top: 6px;
+  }
+  .news-3d {
+    margin-top: 8px;
+    padding: 4px 6px 4px 10px;
+    gap: 8px;
+  }
+  .news-3d p {
+    font-size: 13px;
   }
   .menu-footer {
     margin-top: 4px;
