@@ -1,5 +1,8 @@
 import Phaser from 'phaser';
 import { load, save } from '../storage';
+import type { AudioOut } from './output';
+
+export { fetchFirst } from './files';
 
 // Mute state and optional audio files (from Bombe și Petarde). A missing or undecodable file just
 // means the generated sound plays; files are fetched and decoded here, not through the Phaser
@@ -25,17 +28,14 @@ export function toggleMute(game: Phaser.Game): boolean {
   return muted;
 }
 
-/** The first of `urls` that loads and decodes, or null (missing files are normal: they are optional). */
-export async function fetchFirst(context: AudioContext, urls: string[]): Promise<AudioBuffer | null> {
-  for (const url of urls) {
-    try {
-      const res = await fetch(url);
-      // Dev servers answer unknown paths with index.html.
-      if (!res.ok || (res.headers.get('content-type') ?? '').includes('text/html')) continue;
-      return await context.decodeAudioData(await res.arrayBuffer());
-    } catch {
-      // unsupported format or broken file: try the next one
-    }
-  }
-  return null;
+/** Phaser's Web Audio output for the sound effects and the music (none with HTML5 audio). */
+export function phaserAudioOut(game: Phaser.Game): AudioOut | null {
+  const sound = game.sound;
+  if (!(sound instanceof Phaser.Sound.WebAudioSoundManager)) return null;
+  return {
+    context: sound.context,
+    get destination() {
+      return sound.destination;
+    },
+  };
 }

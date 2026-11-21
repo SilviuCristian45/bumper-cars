@@ -14,6 +14,7 @@
 //
 // Needs the dev servers (npm run dev): client on http://localhost:5174, server on 2568.
 //   node client/scripts/hidden-tab.mjs [--mode tab|freeze] [--when start|round|intermission|podium] [--away <s>] [--chrome <path>]
+//     [--base <A's client URL>] [--base-b <B's client URL>]  (3D client: http://localhost:5175/3d/, npm run dev:3d)
 import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -32,6 +33,9 @@ const MODE = args.mode ?? 'tab';
 const WHEN = args.when ?? 'start';
 const AWAY_S = Number(args.away ?? 15);
 const BASE = args.base ?? 'http://localhost:5174/';
+// B's client, A's by default: --base-b http://localhost:5175/3d/ puts a 3D player in A's 2D room (the 3D client
+// exposes the same window.__game shape with ?debug).
+const BASE_B = args['base-b'] ?? BASE;
 const PORT = 9240 + Math.floor(Math.random() * 50);
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -194,7 +198,7 @@ try {
   const code = await A.waitFor(`(() => { const c = document.querySelector('.room-code')?.textContent?.trim(); return /^[A-Z0-9]{6}$/.test(c ?? '') ? c : ''; })()`, 10000, 'room code');
 
   // B: joins with the invite link.
-  await B.goto(`${BASE}?room=${code}&online&debug`);
+  await B.goto(`${BASE_B}?room=${code}&online&debug`);
   await B.step('Intră la bâlci');
   // Same browser profile as A: the saved name greets B first ("Salut, Gazda!").
   await B.waitFor(`!!document.querySelector('input') || [...document.querySelectorAll('button')].some((b) => b.textContent.trim() === 'Schimbă numele')`);

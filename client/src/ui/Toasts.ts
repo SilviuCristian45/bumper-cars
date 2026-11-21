@@ -1,4 +1,4 @@
-import { el } from './dom';
+import { el } from './el';
 
 // Small messages stacked in the top-right corner: the newest at the bottom, older ones pushed up,
 // at most three, each gone by itself after a few seconds. Never interactive, so it never blocks play.

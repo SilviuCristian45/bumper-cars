@@ -1,12 +1,12 @@
-import Phaser from 'phaser';
 import { getSetting, onSettingChange } from '../settings';
-import { fetchFirst } from './sound';
+import { fetchFirst } from './files';
+import type { AudioOut } from './output';
 
 // The fair music: a carousel-organ waltz (3/4, "oom-pah-pah" bass under a staccato melody),
 // generated with Web Audio and looped, quiet under the sound effects. A file in
 // client/public/audio/ (muzica.ogg, else muzica.mp3) replaces it and loops instead.
-// It goes through Phaser's master gain, so the sound button silences it too; the "Muzică"
-// setting turns it on or off at once. Phaser suspends the audio context while the tab is hidden.
+// It goes through the output's destination (Phaser's master gain in 2D), so the sound button silences
+// it too; the "Muzică" setting turns it on or off at once. The context is suspended while the tab is hidden.
 
 const VOLUME = 0.12;
 /** Quarter note at ~168 bpm. */
@@ -48,13 +48,13 @@ let fileSource: AudioBufferSourceNode | null = null;
 let nextBeatAt = 0;
 let beat = 0;
 
-export function initMusic(game: Phaser.Game): void {
-  if (!(game.sound instanceof Phaser.Sound.WebAudioSoundManager)) return;
-  const manager = game.sound;
-  ctx = manager.context;
+export function initMusic(out: AudioOut | null): void {
+  const destination = out?.destination;
+  if (!out || !destination) return;
+  ctx = out.context;
   gain = ctx.createGain();
   gain.gain.value = VOLUME;
-  gain.connect(manager.destination);
+  gain.connect(destination);
   void fetchFirst(ctx, ['audio/muzica.ogg', 'audio/muzica.mp3']).then((buffer) => {
     file = buffer;
   });

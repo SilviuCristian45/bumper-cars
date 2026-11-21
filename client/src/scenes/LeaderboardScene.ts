@@ -1,17 +1,11 @@
 import Phaser from 'phaser';
-import { LEADERBOARD_MIN_HUMANS, LEADERBOARD_SIZE, nameKey, type LeaderboardEntry } from '@masinute/shared';
-import { fetchLeaderboard, formatRecordDate } from '../net/leaderboard';
 import { ensureTextures } from '../render/textures';
-import { load } from '../storage';
+import { showLeaderboard } from '../screens/leaderboard';
 import { drawBackdrop } from '../ui/backdrop';
-import { button, el, mountScreen, onKey, title } from '../ui/dom';
+import { phaserHost } from './phaserHost';
 
-const MEDALS = ['gold', 'silver', 'bronze'];
-
-/** "Clasament": the all-time top, opened from the menu. */
+/** "Clasament" (screens/leaderboard.ts) over the night fair. */
 export class LeaderboardScene extends Phaser.Scene {
-  private content!: HTMLElement;
-
   constructor() {
     super('leaderboard');
   }
@@ -19,71 +13,6 @@ export class LeaderboardScene extends Phaser.Scene {
   create(): void {
     ensureTextures(this);
     drawBackdrop(this);
-    this.content = el('div', { class: 'leaderboard-body' }, [el('p', { class: 'message info', text: 'Se încarcă...' })]);
-    const back = button('Înapoi', () => this.back(), 'primary', 'medium');
-    mountScreen(this, 'leaderboard', [
-      title(true),
-      el('h2', { text: `Clasament: top ${LEADERBOARD_SIZE}` }),
-      this.content,
-      el('p', {
-        class: 'note',
-        text: `Intră doar meciurile online cu cel puțin ${LEADERBOARD_MIN_HUMANS} jucători (boții nu contează): cel mai bun meci al fiecărei porecle, după puncte, apoi runde câștigate.`,
-      }),
-      back,
-    ]);
-    onKey(this, 'Escape', () => this.back());
-    void this.fetchRows();
-  }
-
-  private async fetchRows(): Promise<void> {
-    const entries = await fetchLeaderboard();
-    // The player may have gone back while the request was out.
-    if (!this.sys.isActive()) return;
-    if (entries === null) {
-      this.content.replaceChildren(
-        el('p', { class: 'message', text: 'Clasamentul nu e disponibil acum: serverul nu răspunde. Încearcă puțin mai târziu.' }),
-      );
-    } else if (entries.length === 0) {
-      this.content.replaceChildren(el('p', { class: 'message info', text: 'Încă nu e niciun meci în clasament. Fii primul!' }));
-    } else {
-      this.content.replaceChildren(this.table(entries));
-    }
-  }
-
-  private table(entries: LeaderboardEntry[]): HTMLElement {
-    const me = nameKey(load('name') ?? '');
-    const head = el(
-      'tr',
-      {},
-      [
-        ['Loc', ''],
-        ['Porecla', ''],
-        ['Puncte', ''],
-        ['Runde', 'Runde câștigate / runde în meci'],
-        ['Scoși', 'Mașinuțe scoase din ring'],
-        ['Meciuri', 'Meciuri jucate'],
-        ['Data', 'Data celui mai bun meci'],
-      ].map(([text, hint]) => el('th', { text, attrs: hint ? { title: hint } : {} })),
-    );
-    const rows = entries.map((e) => {
-      const medal = MEDALS[e.place - 1];
-      const classes = [medal, nameKey(e.name) === me ? 'me' : ''].filter(Boolean).join(' ');
-      return el('tr', { class: classes }, [
-        el('td', { class: 'place', text: String(e.place) }),
-        el('td', { class: 'name', text: e.name }),
-        el('td', { class: 'points', text: String(e.points) }),
-        el('td', { text: `${e.wins}/${e.rounds}` }),
-        el('td', { text: String(e.knockouts) }),
-        el('td', { text: String(e.matches) }),
-        el('td', { class: 'date', text: formatRecordDate(e.endedAt) }),
-      ]);
-    });
-    const table = el('table', { class: 'leaderboard-table' }, [el('thead', {}, [head]), el('tbody', {}, rows)]);
-    // A narrow phone scrolls the table sideways instead of squeezing it.
-    return el('div', { class: 'table-scroll' }, [table]);
-  }
-
-  private back(): void {
-    this.scene.start('menu', {});
+    showLeaderboard(phaserHost(this));
   }
 }

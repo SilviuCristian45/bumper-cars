@@ -1,6 +1,6 @@
 import { isIOS, isStandalone } from '../device';
 import { load, save } from '../storage';
-import { el } from './dom';
+import { el } from './el';
 import { fullscreenAvailable } from './fullscreen';
 
 // iPhone Safari has no fullscreen: a discreet tip to add the game to the home screen, where it

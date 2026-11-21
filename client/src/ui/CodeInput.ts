@@ -1,5 +1,5 @@
 import { normalizeRoomCode, ROOM_CODE_ALPHABET, ROOM_CODE_LENGTH } from '@masinute/shared';
-import { keepInViewOnFocus } from './dom';
+import { keepInViewOnFocus } from './html';
 
 export const CODE_HINT = 'Codul are doar litere și cifre, fără 0, O, 1, I, L.';
 

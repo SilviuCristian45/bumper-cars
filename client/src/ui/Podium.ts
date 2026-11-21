@@ -1,10 +1,11 @@
 import Phaser from 'phaser';
-import { computeAwards, computeStandings, PLAYER_COLORS, type AwardId, type GameState, type NewRecord } from '@masinute/shared';
+import { computeAwards, computeStandings, PLAYER_COLORS, type GameState, type NewRecord } from '@masinute/shared';
 import { firework } from '../render/fx';
 import { FONT, GAME_H, GAME_W, SIDE_W, TOUCH_LAYOUT } from '../render/layout';
 import { hexColor } from '../render/powerupInfo';
 import { TEX } from '../render/textures';
 import { reducedEffects } from '../settings';
+import { AWARD_TEXT, recordsLine } from './matchEnd';
 import { TextButton } from './TextButton';
 
 // End of the match (from Bombe și Petarde): the top three drive up onto a 2-1-3 podium one after
@@ -35,15 +36,6 @@ const ROW_H = 34 * K;
 /** The button: under the podium on touch (the awards fill the right column), bottom center on desktop. */
 const BUTTON_X = TOUCH_LAYOUT ? PODIUM_CX : GAME_W / 2;
 const BUTTON_Y = TOUCH_LAYOUT ? BASE_Y + 90 : GAME_H - 52;
-
-const AWARD_TEXT: Record<AwardId, { title: string; detail: (n: number) => string }> = {
-  batausul: { title: 'Bătăușul', detail: (n) => `cei mai mulți scoși din ring (${n})` },
-  kamikaze: { title: 'Kamikaze', detail: (n) => `cele mai multe ieșiri singur (${n})` },
-  neclintitul: { title: 'Neclintitul', detail: (n) => (n === 0 ? 'n-a ieșit niciodată din ring' : `cele mai puține ieșiri (${n})`) },
-  ciocanarul: { title: 'Ciocănarul', detail: (n) => `cele mai multe lovituri (${n})` },
-  colectionarul: { title: 'Colecționarul', detail: (n) => `${n} power-up-uri adunate` },
-  uriasul: { title: 'Uriașul', detail: (n) => `${n} ${n === 1 ? 'scos' : 'scoși'} din ring cât era mare` },
-};
 
 export interface PodiumOptions {
   me: string;
@@ -125,16 +117,9 @@ export class Podium {
       this.recordText.setText(this.opts.testMatch ? '' : 'Meciurile offline nu intră în clasament.').setColor('#a99cc8');
       return;
     }
-    const me = this.opts.me;
-    const parts = [...records]
-      .sort((a, b) => Number(b.playerId === me) - Number(a.playerId === me) || a.place - b.place)
-      .map((r) =>
-        r.playerId === me
-          ? `${r.kind === 'top' ? 'Ai intrat în top!' : 'Record nou!'} Locul ${r.place}`
-          : `${r.name}: ${r.kind === 'top' ? 'a intrat în top' : 'record nou'}, locul ${r.place}`,
-      );
-    this.recordText.setText(parts.length > 0 ? `★ ${parts.join('  ·  ')} ★` : '');
-    if (parts.length > 0 && !reducedEffects()) {
+    const line = recordsLine(records, this.opts.me);
+    this.recordText.setText(line);
+    if (line && !reducedEffects()) {
       this.scene.tweens.add({ targets: this.recordText, scale: { from: 1.4, to: 1 }, duration: 400, ease: 'Back.easeOut' });
     }
   }

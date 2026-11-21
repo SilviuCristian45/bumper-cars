@@ -1,9 +1,9 @@
-import Phaser from 'phaser';
-import { fetchFirst } from './sound';
+import { fetchFirst } from './files';
+import type { AudioOut } from './output';
 
 // Sound effects. Each one is generated with Web Audio unless a file with its name exists in
 // client/public/audio/ (<name>.ogg, else <name>.mp3): then the file plays instead.
-// Everything goes through Phaser's master gain, so the mute toggle applies.
+// Everything goes through the output's destination (Phaser's master gain in 2D), so the mute toggle applies.
 
 export const SFX_NAMES = [
   'bonk', // two cars hit (louder for a harder hit)
@@ -32,14 +32,14 @@ const GAP_MS: Partial<Record<SfxName, number>> = { bonk: 70 };
 
 const files = new Map<SfxName, AudioBuffer>();
 const lastPlayed = new Map<SfxName, number>();
-let manager: Phaser.Sound.WebAudioSoundManager | null = null;
+let output: AudioOut | null = null;
 let noiseBuffer: AudioBuffer | null = null;
 
 /** Looks for replacement files once, at boot; a missing file simply keeps the generated sound. */
-export function initSfx(game: Phaser.Game): void {
-  if (!(game.sound instanceof Phaser.Sound.WebAudioSoundManager)) return;
-  manager = game.sound;
-  const context = manager.context;
+export function initSfx(out: AudioOut | null): void {
+  if (!out) return;
+  output = out;
+  const context = out.context;
   for (const name of SFX_NAMES) {
     void fetchFirst(context, [`audio/${name}.ogg`, `audio/${name}.mp3`]).then((buffer) => {
       if (buffer) files.set(name, buffer);
@@ -47,10 +47,14 @@ export function initSfx(game: Phaser.Game): void {
   }
 }
 
-/** `volume` 0..1 scales the sound (e.g. quieter for things that do not involve this player). */
-export function playSfx(name: SfxName, volume = 1): void {
-  if (!manager?.destination) return;
-  const ctx = manager.context;
+/**
+ * `volume` 0..1 scales the sound (e.g. quieter for things that do not involve this player); `pan` -1..1
+ * puts it to the left or right (the 3D client, by where it happens on screen).
+ */
+export function playSfx(name: SfxName, volume = 1, pan = 0): void {
+  const destination = output?.destination;
+  if (!output || !destination) return;
+  const ctx = output.context;
   // Before the first click the context is suspended: sounds would all burst out at once later.
   if (ctx.state !== 'running') return;
   const now = performance.now();
@@ -59,7 +63,13 @@ export function playSfx(name: SfxName, volume = 1): void {
 
   const out = ctx.createGain();
   out.gain.value = Math.max(0, Math.min(1, volume));
-  out.connect(manager.destination);
+  if (pan !== 0 && typeof ctx.createStereoPanner === 'function') {
+    const panner = ctx.createStereoPanner();
+    panner.pan.value = Math.max(-1, Math.min(1, pan));
+    out.connect(panner).connect(destination);
+  } else {
+    out.connect(destination);
+  }
   const file = files.get(name);
   if (file) {
     const src = ctx.createBufferSource();

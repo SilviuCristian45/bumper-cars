@@ -39,7 +39,7 @@ import { ensureTextures } from '../render/textures';
 import { getSetting, reducedEffects, vibrate } from '../settings';
 import { ConnectionBanner } from '../ui/ConnectionBanner';
 import { openDialog, type Dialog } from '../ui/dialog';
-import { button, el, useScaleMode } from '../ui/dom';
+import { button, el, sceneLifetime, useScaleMode } from '../ui/dom';
 import { fullscreenOnFirstTap } from '../ui/fullscreen';
 import { requireLandscape } from '../ui/orientation';
 import { notifyPresence } from '../ui/presence';
@@ -117,8 +117,8 @@ export class GameScene extends Phaser.Scene {
     // Every game starts from the default driving numbers; saved ?tune values only for a local ?tune game.
     applyGameTuning({ online: this.transport.online, tune: this.data_.tune, saved: savedTuning() });
     useScaleMode(this, Phaser.Scale.FIT);
-    requireLandscape(this);
-    keepScreenOn(this);
+    requireLandscape(sceneLifetime(this));
+    keepScreenOn(sceneLifetime(this));
     const disarmFullscreen = fullscreenOnFirstTap();
     this.cameras.main.setBackgroundColor('#120a24');
     this.arena = new Arena(this);
@@ -129,7 +129,10 @@ export class GameScene extends Phaser.Scene {
     document.body.classList.toggle('chrome-left', leftHanded);
     this.createOverlays();
     this.createButtons(leftHanded);
-    this.connection = new ConnectionBanner(this);
+    this.connection = new ConnectionBanner(sceneLifetime(this), (message) => {
+      const data: MenuSceneData = { message };
+      this.scene.start('menu', data);
+    });
 
     const keyboard = new KeyboardInput(this.input.keyboard!);
     if (isTouch) {

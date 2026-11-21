@@ -1,0 +1,322 @@
+/* 3D client: HUD, game buttons, ?perf overlay. Page, screens, dialogs, toasts and the touch controls come from
+   the 2D client (client/src/style.css, screens.css, input/touch.css). */
+
+/* The 3D canvas always fills the page (no letterboxing to keep clear of notches: the HUD does that). */
+#game {
+  padding: 0;
+}
+
+#stage canvas {
+  display: block;
+}
+
+.hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.7);
+}
+
+.hud-scores {
+  position: absolute;
+  top: calc(var(--sat) + 10px);
+  left: calc(var(--sal) + 10px);
+  background: rgba(18, 10, 36, 0.6);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 15px;
+  min-width: 150px;
+}
+
+.hud-scores .row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 1.5;
+}
+
+.hud-scores .row.out {
+  opacity: 0.4;
+}
+
+.hud-scores .row.me .name {
+  color: var(--yellow);
+  font-weight: bold;
+}
+
+.hud-scores .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.hud-scores .name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 130px;
+}
+
+.hud-scores .pts {
+  font-weight: bold;
+  min-width: 2ch;
+  text-align: right;
+}
+
+.hud-top {
+  position: absolute;
+  top: calc(var(--sat) + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+}
+
+.hud-round {
+  font-size: 20px;
+  font-weight: bold;
+  color: var(--yellow);
+}
+
+.hud-effect {
+  font-size: 15px;
+  font-weight: bold;
+  margin-top: 2px;
+}
+
+.hud-center {
+  position: absolute;
+  top: 34%;
+  left: 0;
+  right: 0;
+  text-align: center;
+}
+
+.hud-banner {
+  font-size: clamp(32px, 9vh, 84px);
+  font-weight: bold;
+  color: var(--yellow);
+}
+
+.hud-sub {
+  font-size: 17px;
+  margin-top: 6px;
+}
+
+.hud-boost {
+  position: absolute;
+  bottom: calc(var(--sab) + 16px);
+  left: 50%;
+  width: 200px;
+  height: 18px;
+  margin-left: -100px;
+  border: 2px solid rgba(76, 201, 240, 0.6);
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(18, 10, 36, 0.6);
+  font-size: 12px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hud-boost .fill {
+  position: absolute;
+  inset: 0;
+  background: rgba(76, 201, 240, 0.45);
+  transform-origin: left;
+}
+
+.hud-boost.ready {
+  border-color: #9fe7ff;
+  box-shadow: 0 0 12px rgba(76, 201, 240, 0.6);
+}
+
+.hud-boost span {
+  position: relative;
+}
+
+/* Cameră / Pauză / Ieși, under the fullscreen icon (on the left with the left-handed layout). */
+.game-buttons {
+  position: fixed;
+  z-index: 15;
+  top: calc(var(--sat) + 46px);
+  right: calc(var(--sar) + 10px);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.game-buttons.left {
+  right: auto;
+  left: calc(var(--sal) + 10px);
+}
+
+.perf {
+  position: fixed;
+  z-index: 30;
+  right: calc(var(--sar) + 10px);
+  top: calc(var(--sat) + 160px);
+  white-space: pre;
+  font: 12px/1.35 Consolas, Menlo, monospace;
+  color: #b6ffb0;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 6px 8px;
+  border-radius: 6px;
+  pointer-events: none;
+}
+
+/* Phones: the scores stay clear of the joystick (bottom left); smaller text. */
+body.touch .hud-scores {
+  font-size: 13px;
+  min-width: 120px;
+}
+
+body.touch .hud-center {
+  top: 26%;
+}
+
+/* End of the match: the table and awards next to the 3D podium (Podium3D). */
+.podium-panel {
+  position: fixed;
+  z-index: 12;
+  top: calc(var(--sat) + 46px);
+  /* Left of the Cameră / Ieși buttons, which stay usable after the match. */
+  right: calc(var(--sar) + 130px);
+  width: min(440px, 46vw);
+  max-height: calc(100% - var(--sat) - var(--sab) - 72px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 14px 18px;
+  border-radius: 12px;
+  background: rgba(18, 10, 36, 0.86);
+  border: 2px solid rgba(91, 61, 143, 0.9);
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.5s, transform 0.5s;
+  pointer-events: none;
+}
+
+.podium-panel.shown {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+.podium-panel h2 {
+  margin: 0 0 6px;
+  color: var(--yellow);
+  font-size: 26px;
+}
+
+.podium-records {
+  margin: 0 0 8px;
+  color: var(--yellow);
+  font-weight: bold;
+}
+
+.podium-records:empty {
+  display: none;
+}
+
+.podium-records.note {
+  color: var(--muted);
+  font-weight: normal;
+}
+
+.podium-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+}
+
+.podium-table th {
+  color: var(--muted);
+  font-weight: normal;
+  font-size: 13px;
+  text-align: left;
+  padding: 2px 4px;
+}
+
+.podium-table td {
+  padding: 3px 4px;
+  font-weight: bold;
+}
+
+.podium-table td.num,
+.podium-table th:nth-child(n + 3) {
+  text-align: right;
+}
+
+.podium-awards {
+  margin-top: 10px;
+  font-size: 14px;
+}
+
+.podium-awards .label {
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.podium-awards .award b {
+  color: var(--yellow);
+  margin-right: 6px;
+}
+
+.podium-panel .btn {
+  margin-top: 12px;
+  width: 100%;
+}
+
+.podium-wait {
+  margin: 12px 0 0;
+  color: var(--muted);
+}
+
+/* Phones held sideways: a narrower, denser panel, clear of the fullscreen icon. */
+body.touch .podium-panel {
+  width: min(380px, 50vw);
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+body.touch .podium-panel h2 {
+  font-size: 20px;
+}
+
+/* ?debug (Debug3D): the info lines bottom left, labels over the floor. */
+.debug-info {
+  position: fixed;
+  z-index: 31;
+  left: calc(var(--sal) + 8px);
+  bottom: calc(var(--sab) + 8px);
+  white-space: pre;
+  font: 12px/1.35 Consolas, Menlo, monospace;
+  color: #00ff9c;
+  background: rgba(0, 0, 0, 0.67);
+  padding: 2px 4px;
+  pointer-events: none;
+}
+
+.debug-labels {
+  position: fixed;
+  inset: 0;
+  z-index: 11;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.debug-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  white-space: nowrap;
+  font: 11px var(--font);
+  background: rgba(0, 0, 0, 0.67);
+  padding: 1px 2px;
+}

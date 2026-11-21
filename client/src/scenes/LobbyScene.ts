@@ -1,74 +1,18 @@
 import Phaser from 'phaser';
-import {
-  BOT_LEVELS,
-  canStart,
-  MAX_PLAYERS,
-  MIN_PLAYERS_TO_START,
-  nextBotLevel,
-  POINTS_KNOCKOUT,
-  POINTS_ROUND_WIN,
-  POINTS_SELF_OUT,
-  POWERUP_FREQ_MAX,
-  POWERUP_FREQ_MIN,
-  ROUND_OPTIONS,
-  sortedPlayers,
-  type GameState,
-} from '@masinute/shared';
-import { BOT_LEVEL_LABELS } from '../botLevels';
-import { keepScreenOn } from '../device-apis';
-import { isTouch } from '../device';
 import type { GameTransport } from '../net/GameTransport';
-import { ensureTextures, TEX } from '../render/textures';
+import { ensureTextures } from '../render/textures';
+import { LobbyScreen } from '../screens/lobby';
 import { drawBackdrop } from '../ui/backdrop';
-import { ConnectionBanner } from '../ui/ConnectionBanner';
-import { button, el, mountScreen, setButtonStyle, setText, show, textureUrl } from '../ui/dom';
-import { fullscreenOnFirstTap } from '../ui/fullscreen';
-import { requireLandscape } from '../ui/orientation';
-import { notifyPresence } from '../ui/presence';
-import { openSettings } from '../ui/settingsDialog';
-import { debug } from '../urlOptions';
-import type { GameSceneData } from './GameScene';
+import { phaserHost } from './phaserHost';
 
 export interface LobbySceneData {
   transport: GameTransport;
 }
 
-interface PlayerRow {
-  row: HTMLElement;
-  avatar: HTMLImageElement;
-  name: HTMLElement;
-  host: HTMLElement;
-  /** The bot's level; the host cycles it with a click. */
-  level: HTMLButtonElement;
-  /** Id of the bot shown in this row ('' = not a bot). */
-  botId: string;
-}
-
-const COPIED_MS = 1500;
-/** Phones share the invite through the system sheet (WhatsApp...); desktops copy the link. */
-const SHARE_LABEL = isTouch ? 'Trimite invitația' : 'Copiază link';
-
-/** Room code and invite link, the players, and the host's round count / bots / Start. */
+/** The room's lobby (screens/lobby.ts) over the night fair. */
 export class LobbyScene extends Phaser.Scene {
   private transport!: GameTransport;
-  private rows: PlayerRow[] = [];
-  private roundButtons: HTMLButtonElement[] = [];
-  private levelButtons: HTMLButtonElement[] = [];
-  /** Power-ups "Da" / "Nu". */
-  private powerupButtons: HTMLButtonElement[] = [];
-  /** How often power-ups appear (1..5), host only. */
-  private freqSlider!: HTMLInputElement;
-  private freqText!: HTMLElement;
-  private addBotButton!: HTMLButtonElement;
-  private removeBotButton!: HTMLButtonElement;
-  private startButton!: HTMLButtonElement;
-  private shareButton!: HTMLButtonElement;
-  private copyReset?: Phaser.Time.TimerEvent;
-  /** The switch to the game scene is under way. */
-  private leaving = false;
-  private hint!: HTMLElement;
-  private countText!: HTMLElement;
-  private banner!: ConnectionBanner;
+  private screen!: LobbyScreen;
 
   constructor() {
     super('lobby');
@@ -76,259 +20,15 @@ export class LobbyScene extends Phaser.Scene {
 
   init(data: LobbySceneData): void {
     this.transport = data.transport;
-    this.rows = [];
-    this.roundButtons = [];
-    this.levelButtons = [];
-    this.copyReset = undefined;
-    this.leaving = false;
   }
 
   create(): void {
     ensureTextures(this);
     drawBackdrop(this);
-    requireLandscape(this);
-    keepScreenOn(this);
-    const disarm = fullscreenOnFirstTap();
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, disarm);
-
-    mountScreen(this, 'lobby', [el('div', { class: 'lobby-grid' }, [this.createHead(), this.createPlayers(), this.createSide()])]);
-    this.banner = new ConnectionBanner(this);
-    // A match started while the page was in the background: switch as soon as it is shown again,
-    // not only from update() (no frames run while hidden).
-    document.addEventListener('visibilitychange', this.onVisible);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => document.removeEventListener('visibilitychange', this.onVisible));
-  }
-
-  private readonly onVisible = () => {
-    if (!document.hidden && this.scene.isActive()) this.enterGameIfStarted();
-  };
-
-  /** True (and the game scene starting) once the room has left the lobby. */
-  private enterGameIfStarted(): boolean {
-    if (this.leaving) return true;
-    if (this.transport.getState().phase === 'lobby') return false;
-    this.leaving = true; // the handler and update() may both see it before the switch happens
-    const data: GameSceneData = { transport: this.transport, debug, tune: false };
-    this.scene.start('game', data);
-    return true;
-  }
-
-  /** An offline room has no code worth sharing: nobody else can join it. */
-  private createHead(): HTMLElement {
-    const online = this.transport.online;
-    this.shareButton = button(SHARE_LABEL, () => void this.share(), 'secondary', 'small');
-    show(this.shareButton, online);
-    return el('div', { class: 'lobby-head' }, [
-      el('div', { class: 'label', text: online ? 'Codul jocului' : 'Joc offline' }),
-      el('div', { class: 'room-code', text: online ? this.transport.getState().code : 'cu boți' }),
-      this.shareButton,
-      online ? el('div', { class: 'share-hint', text: 'Trimite linkul prietenilor ca să intre' }) : null,
-    ]);
-  }
-
-  private createPlayers(): HTMLElement {
-    this.countText = el('div', { class: 'count' });
-    const list = el('ul', { class: 'player-rows' });
-    for (let i = 0; i < MAX_PLAYERS; i++) {
-      const avatar = el('img', { attrs: { alt: '' } });
-      const name = el('span', { class: 'name' });
-      const host = el('span', { class: 'host-tag', text: 'host' });
-      const level = el('button', { class: 'bot-level', attrs: { type: 'button' } });
-      const row = el('li', { class: 'player-row' }, [avatar, name, host, level]);
-      list.append(row);
-      const entry: PlayerRow = { row, avatar, name, host, level, botId: '' };
-      level.addEventListener('click', () => this.cycleBotLevel(entry.botId));
-      this.rows.push(entry);
-    }
-    const rules = [
-      `Ultimul rămas pe ring +${POINTS_ROUND_WIN} · scoți pe cineva din ring +${POINTS_KNOCKOUT} · ieși singur ${POINTS_SELF_OUT}`,
-      'Punctul de scos e al celui care l-a lovit ultimul (în 3 secunde).',
-      'Power-up-uri: treci peste ele ca să le iei (claxon, mici, colac, ulei, țuică, arcuri, suc, proteină, fantomă).',
-    ];
-    return el('div', { class: 'lobby-players' }, [this.countText, list, el('p', { class: 'rules', text: rules.join('\n') })]);
-  }
-
-  private createSide(): HTMLElement {
-    this.roundButtons = ROUND_OPTIONS.map((rounds) => {
-      const b = button(String(rounds), () => this.transport.send({ type: 'rounds', rounds }));
-      b.classList.add('round-btn');
-      return b;
-    });
-    this.levelButtons = BOT_LEVELS.map((level) => {
-      const b = button(BOT_LEVEL_LABELS[level]!, () => this.transport.send({ type: 'botLevel', level }));
-      b.classList.add('level-btn');
-      return b;
-    });
-    this.powerupButtons = [true, false].map((on) => {
-      const b = button(on ? 'Da' : 'Nu', () => this.transport.send({ type: 'powerups', on }));
-      b.classList.add('round-btn');
-      return b;
-    });
-    this.freqSlider = el('input', {
-      class: 'freq-slider',
-      attrs: { type: 'range', min: String(POWERUP_FREQ_MIN), max: String(POWERUP_FREQ_MAX), step: '1', 'aria-label': 'Cât de des apar power-up-urile' },
-    });
-    this.freqSlider.addEventListener('input', () => this.transport.send({ type: 'powerupFreq', level: Number(this.freqSlider.value) }));
-    this.freqText = el('div', { class: 'freq-text' });
-    this.addBotButton = button('+Bot', () => this.transport.send({ type: 'addBot' }));
-    this.removeBotButton = button('-Bot', () => this.transport.send({ type: 'removeBot' }));
-    this.startButton = button('Start', () => this.transport.send({ type: 'start' }), 'primary', 'medium');
-    this.hint = el('div', { class: 'hint' });
-    const leave = button('Ieși din joc', () => this.leave(), 'secondary', 'small');
-    return el('div', { class: 'lobby-side' }, [
-      el('div', { class: 'label', text: 'Runde' }),
-      el('div', { class: 'btn-row' }, this.roundButtons),
-      el('div', { class: 'label', text: 'Power-up-uri' }),
-      el('div', { class: 'btn-row' }, this.powerupButtons),
-      el('div', { class: 'freq' }, [this.freqSlider, this.freqText]),
-      el('div', { class: 'label', text: 'Nivel boți' }),
-      el('div', { class: 'btn-row' }, this.levelButtons),
-      el('div', { class: 'btn-row' }, [this.addBotButton, this.removeBotButton]),
-      this.startButton,
-      this.hint,
-      el('div', { class: 'btn-row' }, [isTouch ? button('Setări', () => openSettings(), 'secondary', 'small') : null, leave]),
-    ]);
+    this.screen = new LobbyScreen(phaserHost(this), this.transport);
   }
 
   update(time: number, delta: number): void {
-    if (!this.banner.update(this.transport, time)) return;
-    this.transport.update(delta);
-    notifyPresence(this.transport);
-    if (this.enterGameIfStarted()) return;
-    const state = this.transport.getState();
-    this.syncPlayers(state);
-    this.syncControls(state);
-  }
-
-  private syncPlayers(state: Readonly<GameState>): void {
-    const players = sortedPlayers(state as GameState);
-    setText(this.countText, `Jucători ${players.length}/${MAX_PLAYERS}`);
-    this.rows.forEach((row, i) => {
-      const p = players[i];
-      row.avatar.style.visibility = p ? 'visible' : 'hidden';
-      show(row.host, !!p && p.id === state.hostId);
-      row.row.classList.toggle('empty', !p);
-      row.row.classList.toggle('away', !!p && !p.connected);
-      row.botId = p?.isBot ? p.id : '';
-      show(row.level, !!row.botId);
-      if (!p) {
-        setText(row.name, 'loc liber');
-        return;
-      }
-      const src = avatarUrl(this.game, p.slot);
-      if (row.avatar.getAttribute('src') !== src) row.avatar.src = src;
-      setText(row.name, p.id === this.transport.playerId ? `${p.name} (tu)` : p.name);
-      if (p.isBot) this.syncLevelTag(row.level, p.botLevel, state.hostId === this.transport.playerId);
-    });
-  }
-
-  private syncControls(state: Readonly<GameState>): void {
-    const me = this.transport.playerId;
-    const isHost = state.hostId === me;
-    ROUND_OPTIONS.forEach((rounds, i) => {
-      const b = this.roundButtons[i]!;
-      setButtonStyle(b, state.roundsTotal === rounds ? 'primary' : 'secondary');
-      b.disabled = !isHost && state.roundsTotal !== rounds;
-    });
-    [true, false].forEach((on, i) => {
-      const b = this.powerupButtons[i]!;
-      setButtonStyle(b, state.powerups === on ? 'primary' : 'secondary');
-      b.disabled = !isHost && state.powerups !== on;
-    });
-    // The host's own drag wins while it is in flight; everyone else follows the state.
-    if (!(isHost && document.activeElement === this.freqSlider)) this.freqSlider.value = String(state.puFreq);
-    this.freqSlider.disabled = !isHost || !state.powerups;
-    setText(this.freqText, state.powerups ? `Cât de des: ${FREQ_LABELS[state.puFreq] ?? state.puFreq} (${state.puFreq}/${POWERUP_FREQ_MAX})` : 'Fără power-up-uri');
-    BOT_LEVELS.forEach((level, i) => {
-      const b = this.levelButtons[i]!;
-      setButtonStyle(b, state.botLevel === level ? 'primary' : 'secondary');
-      b.disabled = !isHost && state.botLevel !== level;
-    });
-    const players = Object.values(state.players);
-    show(this.addBotButton, isHost);
-    this.addBotButton.disabled = players.length >= MAX_PLAYERS;
-    show(this.removeBotButton, isHost);
-    this.removeBotButton.disabled = !players.some((p) => p.isBot);
-    show(this.startButton, isHost);
-    this.startButton.disabled = !canStart(state as GameState, me);
-    if (!isHost) setText(this.hint, 'Așteaptă ca hostul să pornească meciul.');
-    else if (players.length < MIN_PLAYERS_TO_START) setText(this.hint, `Minim ${MIN_PLAYERS_TO_START} mașinuțe pentru Start: adaugă un bot.`);
-    else setText(this.hint, '');
-  }
-
-  private syncLevelTag(tag: HTMLButtonElement, botLevel: number, isHost: boolean): void {
-    const label = BOT_LEVEL_LABELS[botLevel] ?? '';
-    setText(tag, label);
-    for (const level of BOT_LEVELS) tag.classList.toggle(`lvl-${level}`, botLevel === level);
-    tag.disabled = !isHost;
-    tag.title = isHost ? `Bot ${label}: clic ca să schimbi nivelul` : `Bot, nivel ${label}`;
-  }
-
-  /** Easy -> medium -> hard -> easy; the server checks that we are the host and still in the lobby. */
-  private cycleBotLevel(botId: string): void {
-    const bot = this.transport.getState().players[botId];
-    if (bot?.isBot) this.transport.send({ type: 'setBotLevel', botId, level: nextBotLevel(bot.botLevel) });
-  }
-
-  private async share(): Promise<void> {
-    const url = new URL(window.location.href);
-    const code = this.transport.getState().code;
-    url.search = `?room=${code}`;
-    url.hash = '';
-    if (isTouch && typeof navigator.share === 'function') {
-      try {
-        await navigator.share({ title: 'Mașinuțe de Bâlci', text: `Hai la bâlci! Intră în jocul meu (cod ${code}):`, url: url.toString() });
-        return;
-      } catch (err) {
-        // Closing the share sheet is a choice, not a failure; anything else falls back to copying.
-        if (err instanceof DOMException && err.name === 'AbortError') return;
-      }
-    }
-    const ok = await copyText(url.toString());
-    this.shareButton.textContent = ok ? 'Copiat!' : 'Nu s-a putut copia';
-    this.copyReset?.remove();
-    this.copyReset = this.time.delayedCall(COPIED_MS, () => (this.shareButton.textContent = SHARE_LABEL));
-  }
-
-  /** For good, no confirmation: the seat is freed at once. */
-  private leave(): void {
-    this.transport.dispose();
-    this.scene.start('menu', {});
-  }
-}
-
-/** The power-up frequency levels as the lobby names them. */
-const FREQ_LABELS: Record<number, string> = { 1: 'rar', 2: 'din când în când', 3: 'des', 4: 'foarte des', 5: 'haos' };
-
-const avatars = new Map<number, string>();
-
-function avatarUrl(game: Phaser.Game, slot: number): string {
-  let url = avatars.get(slot);
-  if (!url) {
-    url = textureUrl(game, TEX.car(slot));
-    avatars.set(slot, url);
-  }
-  return url;
-}
-
-async function copyText(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    // Clipboard API needs a secure context; fall back to the legacy copy command.
-    const area = document.createElement('textarea');
-    area.value = text;
-    area.style.position = 'fixed';
-    area.style.opacity = '0';
-    document.body.appendChild(area);
-    area.select();
-    try {
-      return document.execCommand('copy');
-    } catch {
-      return false;
-    } finally {
-      area.remove();
-    }
+    this.screen.update(time, delta);
   }
 }
