@@ -14,7 +14,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CADDYFILE=/etc/caddy/Caddyfile
 DOMAIN=masinute-balci.duckdns.org
-OTHERS=(bombe-petarde.duckdns.org tren-api.duckdns.org)
+OTHERS=(bombe-petarde.duckdns.org tren-api.duckdns.org saniuta-la-vale.duckdns.org)
 DRY_RUN=0
 [ "${1:-}" = "--dry-run" ] && DRY_RUN=1
 
