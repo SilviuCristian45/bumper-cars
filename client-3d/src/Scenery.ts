@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Quality } from './settings3d';
+import { painted, solid, stripes } from './paint';
 import { glowDot } from './textures';
 
 // The night fair around the ring, all low-poly and drawn from code: a starry sky, the big wheel turning
@@ -22,35 +23,6 @@ const TENT_STRIPES: [number, number][] = [
   [0x2a9d8f, 0xfff4d6],
   [0x7b2cbf, 0xffd166],
 ];
-
-type Paint = (x: number, y: number, z: number) => number;
-
-/** Non-indexed copy of `geom` with a color per triangle (chosen at the triangle's center). */
-function painted(geom: THREE.BufferGeometry, paint: Paint): THREE.BufferGeometry {
-  const g = geom.index ? geom.toNonIndexed() : geom;
-  if (g !== geom) geom.dispose();
-  g.deleteAttribute('uv');
-  const pos = g.attributes.position!;
-  const colors = new Float32Array(pos.count * 3);
-  const c = new THREE.Color();
-  for (let i = 0; i < pos.count; i += 3) {
-    const x = (pos.getX(i) + pos.getX(i + 1) + pos.getX(i + 2)) / 3;
-    const y = (pos.getY(i) + pos.getY(i + 1) + pos.getY(i + 2)) / 3;
-    const z = (pos.getZ(i) + pos.getZ(i + 1) + pos.getZ(i + 2)) / 3;
-    c.setHex(paint(x, y, z));
-    for (let k = 0; k < 3; k++) colors.set([c.r, c.g, c.b], (i + k) * 3);
-  }
-  g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  return g;
-}
-
-const solid = (color: number): Paint => () => color;
-
-/** Alternating stripes around the y axis (n stripes all around). */
-const stripes = (a: number, b: number, n: number): Paint => (x, _y, z) => {
-  const turn = (Math.atan2(z, x) / (2 * Math.PI) + 1) % 1;
-  return Math.floor(turn * n) % 2 === 0 ? a : b;
-};
 
 export class Scenery {
   readonly group = new THREE.Group();

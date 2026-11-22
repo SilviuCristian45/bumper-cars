@@ -1,4 +1,3 @@
-import * as THREE from 'three';
 import type { GameEvent, GameState } from '@masinute/shared';
 import type { RenderView } from '@client/net/view';
 import { CarLayer } from './CarLayer';
@@ -42,11 +41,6 @@ export class Board {
   dispose(): void {
     this.world.scene.remove(this.cars.group, this.powerups.group);
     this.cars.dispose();
-    this.powerups.group.traverse((o) => {
-      if (o instanceof THREE.Mesh) {
-        o.geometry.dispose();
-        (o.material as THREE.Material).dispose();
-      }
-    });
+    this.powerups.dispose();
   }
 }

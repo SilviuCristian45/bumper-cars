@@ -12,13 +12,21 @@ import {
 } from '@masinute/shared';
 import { POWERUP_INFO } from '@client/render/powerupInfo';
 import { toWorld } from './coords';
+import { powerupModels } from './powerupModels';
 
 const POP_SECONDS = 0.25;
+// The models are ~24 units across; a bit bigger reads better from the match camera.
+const MODEL_SCALE = 1.3;
 
-/** Power-ups as simple floating, spinning gems in their HUD color; oil puddles as dark discs; the horn's shockwave. */
+/**
+ * Power-ups as small low-poly models (powerupModels.ts) floating and spinning over a glowing ring in their
+ * HUD color; oil puddles as dark discs; the horn's shockwave.
+ */
 export class PowerupLayer {
   readonly group = new THREE.Group();
-  private readonly gems: THREE.Mesh[] = [];
+  private readonly models = powerupModels();
+  private readonly items: THREE.Mesh[] = [];
+  private readonly rings: THREE.Mesh[] = [];
   private readonly kinds: number[] = [];
   private readonly ages: number[] = [];
   private readonly puddles: THREE.Mesh[] = [];
@@ -27,14 +35,19 @@ export class PowerupLayer {
   private clock = 0;
 
   constructor() {
-    const gemGeom = new THREE.OctahedronGeometry(11, 0);
+    // A little self-light so the models read under the night lighting; double-sided for the open bands.
+    const itemMat = new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x2a2a2a, side: THREE.DoubleSide });
+    const ringGeom = new THREE.RingGeometry(14, 17.5, 28).rotateX(-Math.PI / 2);
     for (let i = 0; i < POWERUP_SLOTS; i++) {
-      const gem = new THREE.Mesh(gemGeom, new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x000000 }));
-      gem.visible = false;
-      this.gems.push(gem);
+      const item = new THREE.Mesh(undefined, itemMat);
+      item.visible = false;
+      this.items.push(item);
+      const ring = new THREE.Mesh(ringGeom, new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false }));
+      ring.visible = false;
+      this.rings.push(ring);
       this.kinds.push(PU_NONE);
       this.ages.push(0);
-      this.group.add(gem);
+      this.group.add(item, ring);
     }
     const puddleGeom = new THREE.CircleGeometry(toWorld(OIL_RADIUS), 20).rotateX(-Math.PI / 2);
     const puddleMat = new THREE.MeshBasicMaterial({ color: 0x24123a, transparent: true, opacity: 0.75, depthWrite: false });
@@ -65,28 +78,31 @@ export class PowerupLayer {
     this.clock += dt;
     for (let i = 0; i < POWERUP_SLOTS; i++) {
       const slot = powerupAt(state, i);
-      const gem = this.gems[i]!;
+      const item = this.items[i]!;
+      const ring = this.rings[i]!;
       if (slot.kind !== this.kinds[i]) {
         this.kinds[i] = slot.kind;
         this.ages[i] = 0;
-        if (slot.kind !== PU_NONE) {
-          const color = POWERUP_INFO[slot.kind]?.color ?? 0xffffff;
-          const mat = gem.material as THREE.MeshLambertMaterial;
-          mat.color.setHex(color);
-          mat.emissive.setHex(color).multiplyScalar(0.45);
-        }
+        const model = this.models.get(slot.kind);
+        if (model) item.geometry = model;
+        (ring.material as THREE.MeshBasicMaterial).color.setHex(POWERUP_INFO[slot.kind]?.color ?? 0xffffff);
       }
-      if (slot.kind === PU_NONE) {
-        gem.visible = false;
+      if (slot.kind === PU_NONE || !this.models.has(slot.kind)) {
+        item.visible = ring.visible = false;
         continue;
       }
       this.ages[i] += dt;
       const blink = slot.ticks < POWERUP_BLINK_TICKS && Math.floor(this.clock * 8) % 2 === 0;
-      gem.visible = !blink;
+      item.visible = ring.visible = !blink;
       const pop = Math.min(1, this.ages[i]! / POP_SECONDS);
-      gem.scale.setScalar(pop * (1 + Math.sin(this.clock * 6) * 0.06));
-      gem.position.set(toWorld(slot.x), 16 + Math.sin(this.clock * 3 + i) * 3, toWorld(slot.y));
-      gem.rotation.y = this.clock * 2 + i;
+      const x = toWorld(slot.x);
+      const z = toWorld(slot.y);
+      item.scale.setScalar(MODEL_SCALE * pop * (1 + Math.sin(this.clock * 6) * 0.05));
+      item.position.set(x, 21 + Math.sin(this.clock * 3 + i) * 3, z);
+      item.rotation.y = this.clock * 1.6 + i;
+      ring.position.set(x, 0.7, z);
+      ring.scale.setScalar(pop);
+      (ring.material as THREE.MeshBasicMaterial).opacity = 0.55 + Math.sin(this.clock * 5 + i) * 0.25;
     }
 
     let n = 0;
@@ -106,5 +122,15 @@ export class PowerupLayer {
       (this.wave.material as THREE.MeshBasicMaterial).opacity = 1 - t;
       if (t >= 1) this.waveAge = -1;
     }
+  }
+
+  dispose(): void {
+    for (const model of this.models.values()) model.dispose();
+    this.group.traverse((o) => {
+      if (o instanceof THREE.Mesh) {
+        o.geometry.dispose();
+        (o.material as THREE.Material).dispose();
+      }
+    });
   }
 }
