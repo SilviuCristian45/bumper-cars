@@ -4,6 +4,7 @@ import { MAX_SPEED, PLAYER_COLORS, RING_RADIUS, type PlayerState } from '@masinu
 import type { Pose } from '@client/net/view';
 import type { Quality } from './settings3d';
 import { ease, headingToYaw, LOST_DROP, speedToWorld, toWorld } from './coords';
+import { driverOf, driverParts } from './drivers';
 
 /** Where the antenna leaves the car, in the car's own frame (x forward, z to the right, unscaled). */
 export const ANTENNA_BASE = new THREE.Vector3(-14, 36, 0);
@@ -24,8 +25,10 @@ const MAX_LEAN = 0.2;
 /**
  * One low-poly bumper car merged into a single geometry with vertex colors (one draw call):
  * rubber bumper, body in the player's color, hood, seat, driver, antenna mount. Faces +x.
+ * `driver` (see drivers.ts) puts a bot's own character in the seat instead of the plain driver.
  */
-export function carGeometry(color: number, quality: Quality): THREE.BufferGeometry {
+export function carGeometry(color: number, quality: Quality, driver?: string): THREE.BufferGeometry {
+  const custom = driverParts(driver);
   const seg = quality === 'high' ? 20 : 12;
   const body = new THREE.Color(color);
   const hood = body.clone().lerp(new THREE.Color(0xffffff), 0.25);
@@ -36,10 +39,14 @@ export function carGeometry(color: number, quality: Quality): THREE.BufferGeomet
     [new THREE.BoxGeometry(13, 5, 20), hood, 8.5, 20.5, 0],
     [new THREE.BoxGeometry(12, 3, 18), SEAT, -5, 19.5, 0],
     [new THREE.BoxGeometry(5, 13, 20), SEAT, -11, 24.5, 0],
-    [new THREE.BoxGeometry(6, 8, 10), torso, -4, 23.5, 0],
-    [new THREE.SphereGeometry(4.6, quality === 'high' ? 10 : 7, quality === 'high' ? 8 : 5), SKIN, -3.5, 30, 0],
     [new THREE.CylinderGeometry(1.8, 2.2, 7, 6), RUBBER, ANTENNA_BASE.x, ANTENNA_BASE.y - 3.5, 0],
   ];
+  if (!custom) {
+    parts.push(
+      [new THREE.BoxGeometry(6, 8, 10), torso, -4, 23.5, 0],
+      [new THREE.SphereGeometry(4.6, quality === 'high' ? 10 : 7, quality === 'high' ? 8 : 5), SKIN, -3.5, 30, 0],
+    );
+  }
   const c = new THREE.Color();
   const geoms = parts.map(([g, col, x, y, z]) => {
     g.translate(x, y, z);
@@ -50,8 +57,13 @@ export function carGeometry(color: number, quality: Quality): THREE.BufferGeomet
     for (let i = 0; i < n; i++) colors.set([c.r, c.g, c.b], i * 3);
     g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     g.deleteAttribute('uv');
-    return g;
+    if (!custom) return g;
+    // The drivers' pieces are non-indexed (a color per triangle): merge like with like.
+    const flat = g.toNonIndexed();
+    g.dispose();
+    return flat;
   });
+  if (custom) geoms.push(...custom);
   const merged = mergeGeometries(geoms)!;
   for (const g of geoms) g.dispose();
   return merged;
@@ -97,7 +109,7 @@ export class CarView {
       quality === 'high'
         ? new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.45, metalness: 0.15 })
         : new THREE.MeshLambertMaterial({ vertexColors: true });
-    this.mesh = new THREE.Mesh(carGeometry(this.color, quality), this.material);
+    this.mesh = new THREE.Mesh(carGeometry(this.color, quality, driverOf(p)), this.material);
     this.mesh.castShadow = quality === 'high';
     this.body.add(this.mesh);
     this.root.add(this.body);

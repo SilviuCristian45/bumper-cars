@@ -7,6 +7,7 @@ import { el } from '@client/ui/el';
 import { button, setText } from '@client/ui/html';
 import { AWARD_TEXT, recordsLine } from '@client/ui/matchEnd';
 import { carGeometry } from './Car';
+import { driverOf } from './drivers';
 import { Label } from './Label';
 import type { Quality } from './settings3d';
 import { glowDot } from './textures';
@@ -79,7 +80,7 @@ export class Podium3D {
       );
       step.position.set(x, 0, 0);
       step.scale.y = 0.001;
-      const car = new THREE.Mesh(carGeometry(color, quality), new THREE.MeshLambertMaterial({ vertexColors: true }));
+      const car = new THREE.Mesh(carGeometry(color, quality, driverOf(p)), new THREE.MeshLambertMaterial({ vertexColors: true }));
       car.rotation.y = -Math.PI / 2; // nose toward the camera (+z)
       car.position.set(x, h, 0);
       car.visible = false;
