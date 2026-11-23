@@ -1,10 +1,12 @@
+import { DRIVER_COUNT } from '@masinute/shared';
 import { isTouch } from '@client/device';
 import { load, save } from '@client/storage';
 import { el } from '@client/ui/el';
 import type { CameraMode } from './CameraRig';
 
-// The 3D client's own settings, remembered on this device (masinute.quality3d / masinute.camera3d):
-// rendering quality and the camera a match starts with. ?quality=low|high overrides the saved quality.
+// The 3D client's own settings, remembered on this device (masinute.quality3d / camera3d / minimap3d / driver3d):
+// rendering quality, the camera a match starts with, the minimap, the character in the driver seat.
+// ?quality=low|high overrides the saved quality.
 
 export type Quality = 'low' | 'high';
 
@@ -91,4 +93,17 @@ export function settingsRows(onQuality: (quality: Quality) => void): HTMLElement
     );
   }
   return rows;
+}
+
+/** The character in the driver seat (masinute.driver3d, 0..DRIVER_COUNT); a random one on the first visit. */
+export function getDriver(): number {
+  const saved = Number(load('driver3d'));
+  if (load('driver3d') !== null && Number.isInteger(saved) && saved >= 0 && saved <= DRIVER_COUNT) return saved;
+  const pick = 1 + Math.floor(Math.random() * DRIVER_COUNT);
+  saveDriver(pick);
+  return pick;
+}
+
+export function saveDriver(driver: number): void {
+  save('driver3d', String(driver));
 }

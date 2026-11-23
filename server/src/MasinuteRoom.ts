@@ -28,6 +28,7 @@ import {
   setConnected,
   setDefaultBotLevel,
   setPowerupFreq,
+  setDriver,
   setPowerups,
   setRounds,
   skipBotRound,
@@ -146,6 +147,9 @@ export class MasinuteRoom extends Room<{ state: RoomState }> {
     });
     this.onMessage('powerupFreq', (client, msg: { level?: unknown }) => {
       if (typeof msg?.level === 'number') setPowerupFreq(this.game, client.sessionId, msg.level);
+    });
+    this.onMessage('driver', (client, msg: { driver?: unknown }) => {
+      if (typeof msg?.driver === 'number') setDriver(this.game, client.sessionId, msg.driver);
     });
     this.onMessage('setBotLevel', (client, msg: { botId?: unknown; level?: unknown }) => {
       if (typeof msg?.botId === 'string' && typeof msg.level === 'number') {

@@ -10,6 +10,7 @@ import { openSettings } from '@client/ui/settingsDialog';
 import { debug } from '@client/urlOptions';
 import { carAvatar } from './avatars';
 import { Demo } from './Demo';
+import { driverPicker } from './DriverPicker';
 import { Match } from './Match';
 import { perf } from './options';
 import { PerfOverlay } from './PerfOverlay';
@@ -119,6 +120,7 @@ export class App {
       isActive: () => !life.ended,
       mount: (className, children) => mountHtmlScreen(life, className, children),
       avatarUrl: carAvatar,
+      driverPicker: (transport) => driverPicker(life, transport),
       openSettings: () => openSettings({ extra: settingsRows((q) => this.setQuality(q)) }),
       cornerToggles: ['music', 'reducedEffects'],
       settingsOnDesktop: true,

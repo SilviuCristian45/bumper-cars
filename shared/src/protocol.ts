@@ -15,6 +15,7 @@ export type ClientMessage =
   | { type: 'powerups'; on: boolean } // host, lobby: power-ups on the ring or not
   | { type: 'powerupFreq'; level: number } // host, lobby: how often they appear, 1..5
   | { type: 'setBotLevel'; botId: string; level: number } // host, lobby: one bot's level
+  | { type: 'driver'; driver: number } // anyone, lobby: own character in the 3D driver seat, 0..DRIVER_COUNT
   | { type: 'start' } // host: lobby -> round 1
   | { type: 'lobby' } // host: finished -> back to the lobby ("Încă un meci")
   | { type: 'skipRound' } // host, only while onlyBotsAlive

@@ -72,6 +72,7 @@ export const PLAYER_STATE_KEYS = [
   'oilTicks',
   'sizePct',
   'ghostFade',
+  'driver',
   'idle',
 ] as const satisfies readonly (keyof PlayerState)[];
 

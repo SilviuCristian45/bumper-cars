@@ -3,6 +3,7 @@ import {
   BOT_EASY,
   BOT_HARD,
   BOT_NAMES,
+  DRIVER_COUNT,
   MAX_PLAYERS,
   addBot,
   addPlayer,
@@ -13,6 +14,7 @@ import {
   sanitizeName,
   setBotLevel,
   setDefaultBotLevel,
+  setDriver,
   setRounds,
   startMatch,
 } from '../src';
@@ -96,5 +98,25 @@ describe('lobby and match lifecycle', () => {
     const long = createGameState({ code: 'ABCDEF', seed: 's' });
     addPlayer(long, 'e', 'Abcdefghijklmnop');
     expect((addPlayer(long, 'f', 'ABCDEFGHIJKLMNOP') as { player: { name: string } }).player.name).toBe('ABCDEFGHIJKLMN 2');
+  });
+
+  it('each human picks their own driver (shared picks allowed), only in the lobby, never for a bot', () => {
+    const state = createGameState({ code: 'L', seed: 1 });
+    addPlayer(state, 'h', 'Host');
+    addPlayer(state, 'g', 'Guest');
+    addBot(state, 'h', 'bot1');
+    expect(state.players.g!.driver).toBe(0);
+    expect(setDriver(state, 'g', 7)).toBe(true);
+    expect(setDriver(state, 'h', 7)).toBe(true);
+    expect([state.players.h!.driver, state.players.g!.driver]).toEqual([7, 7]);
+    expect(setDriver(state, 'g', DRIVER_COUNT + 1)).toBe(false);
+    expect(setDriver(state, 'g', -1)).toBe(false);
+    expect(setDriver(state, 'g', 2.5)).toBe(false);
+    expect(setDriver(state, 'bot1', 3)).toBe(false);
+    expect(setDriver(state, 'nobody', 3)).toBe(false);
+    expect(setDriver(state, 'g', 0)).toBe(true);
+    startMatch(state, 'h');
+    expect(setDriver(state, 'g', 4)).toBe(false);
+    expect(state.players.g!.driver).toBe(0);
   });
 });

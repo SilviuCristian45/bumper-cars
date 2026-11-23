@@ -104,6 +104,7 @@ export class LobbyScreen {
       el('div', { class: 'room-code', text: online ? this.transport.getState().code : 'cu boți' }),
       this.shareButton,
       online ? el('div', { class: 'share-hint', text: 'Trimite linkul prietenilor ca să intre' }) : null,
+      this.host.driverPicker?.(this.transport) ?? null,
     ]);
   }
 

@@ -98,6 +98,8 @@ export const BOT_LEVELS: readonly number[] = [BOT_EASY, BOT_MEDIUM, BOT_HARD];
 export const DEFAULT_BOT_LEVEL = BOT_MEDIUM;
 
 export const BOT_NAMES: readonly string[] = ['Căluțul', 'Vată de Zahăr', 'Turtă Dulce', 'Clovnul', 'Scrânciobul', 'Lanțurile'];
+/** Characters a player can pick for the 3D client's driver seat (PlayerState.driver 1..DRIVER_COUNT). */
+export const DRIVER_COUNT = 15;
 
 // Power-ups: they appear at random spots on the ring and are picked up by driving over them.
 // Kinds (GameState.puNKind, PlayerState.effect); 0 = none.

@@ -38,6 +38,8 @@ export interface ScreenHost {
   isActive(): boolean;
   /** Mounts the screen's HTML over the host's backdrop, for the screen's lifetime. */
   mount(className: string, children: Child[]): HTMLElement;
+  /** The lobby's picker of the character in the own car's driver seat (3D only: 2D draws no drivers). */
+  driverPicker?(transport: GameTransport): HTMLElement;
   /** A small picture of the car of a slot, for the lobby rows. */
   avatarUrl(slot: number): string;
   openSettings(): void;

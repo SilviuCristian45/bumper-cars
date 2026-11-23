@@ -7,6 +7,7 @@ import {
   removeBot,
   runTick,
   setBotLevel,
+  setDriver,
   setDefaultBotLevel,
   setPowerupFreq,
   setPowerups,
@@ -34,6 +35,8 @@ export interface LocalOptions {
   /** How often power-ups appear, 1..5 (default: as in a new room). */
   powerupFreq?: number;
   seed: string;
+  /** The player's character in the 3D driver seat (0 = plain driver). */
+  driver?: number;
   /** Start round 1 right away (test URL options) instead of waiting in the lobby. */
   autoStart: boolean;
 }
@@ -60,6 +63,7 @@ export class LocalTransport implements GameTransport {
   constructor(opts: LocalOptions) {
     this.state = createGameState({ code: generateRoomCode(Math.random), seed: opts.seed });
     addPlayer(this.state, this.playerId, opts.name);
+    if (opts.driver !== undefined) setDriver(this.state, this.playerId, opts.driver);
     if (opts.botLevel !== undefined) setDefaultBotLevel(this.state, this.playerId, opts.botLevel);
     for (let i = 0; i < opts.bots; i++) this.addBot();
     setRounds(this.state, this.playerId, opts.rounds);
@@ -85,6 +89,7 @@ export class LocalTransport implements GameTransport {
     else if (msg.type === 'botLevel') setDefaultBotLevel(this.state, this.playerId, msg.level);
     else if (msg.type === 'setBotLevel') setBotLevel(this.state, this.playerId, msg.botId, msg.level);
     else if (msg.type === 'powerups') setPowerups(this.state, this.playerId, msg.on);
+    else if (msg.type === 'driver') setDriver(this.state, this.playerId, msg.driver);
     else if (msg.type === 'powerupFreq') setPowerupFreq(this.state, this.playerId, msg.level);
     else if (msg.type === 'start') startMatch(this.state, this.playerId);
     else if (msg.type === 'lobby') backToLobby(this.state, this.playerId);

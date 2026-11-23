@@ -2,6 +2,7 @@ import {
   BOT_HARD,
   BOT_LEVELS,
   BOT_NAMES,
+  DRIVER_COUNT,
   DEFAULT_BOT_LEVEL,
   DEFAULT_POWERUP_FREQ,
   DEFAULT_ROUNDS,
@@ -150,6 +151,7 @@ export function addPlayer(state: GameState, id: string, name: string, isBot = fa
     oilTicks: 0,
     sizePct: 100,
     ghostFade: 0,
+    driver: 0,
     idle: false,
   };
   state.players[id] = player;
@@ -177,6 +179,15 @@ export function setBotLevel(state: GameState, byId: string, botId: string, level
   const bot = state.players[botId];
   if (byId !== state.hostId || state.phase !== 'lobby' || !bot?.isBot || !BOT_LEVELS.includes(level)) return false;
   bot.botLevel = level;
+  return true;
+}
+
+/** A human picks the character driving their car in the 3D client (0 = plain driver). Own car only, lobby-only. */
+export function setDriver(state: GameState, byId: string, driver: number): boolean {
+  const p = state.players[byId];
+  if (!p || p.isBot || state.phase !== 'lobby') return false;
+  if (!Number.isInteger(driver) || driver < 0 || driver > DRIVER_COUNT) return false;
+  p.driver = driver;
   return true;
 }
 

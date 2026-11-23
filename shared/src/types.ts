@@ -64,6 +64,9 @@ export interface PlayerState {
   oilTicks: number;
   sizePct: number; // radius in percent of CAR_RADIUS: 100, up to proteinSizePct while Pudră proteică lasts (grows and shrinks gradually)
   ghostFade: number; // >0 right after Fantomă ended on top of a car: collisions with it only drift apart gently
+  // Looks only, never read by the simulation: the character in the 3D client's driver seat
+  // (0 = the plain driver, 1..DRIVER_COUNT = the player's pick; bots are drawn by their name).
+  driver: number;
   // Set by the server room, outside the simulation (which never reads it): a player with no input for
   // IDLE_TICKS while a round is played (tab in the background, connection down). Others see "zzz".
   idle: boolean;

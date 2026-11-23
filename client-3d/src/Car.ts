@@ -25,9 +25,9 @@ const MAX_LEAN = 0.2;
 /**
  * One low-poly bumper car merged into a single geometry with vertex colors (one draw call):
  * rubber bumper, body in the player's color, hood, seat, driver, antenna mount. Faces +x.
- * `driver` (see drivers.ts) puts a bot's own character in the seat instead of the plain driver.
+ * `driver` (see drivers.ts) puts a character in the seat instead of the plain driver (0).
  */
-export function carGeometry(color: number, quality: Quality, driver?: string): THREE.BufferGeometry {
+export function carGeometry(color: number, quality: Quality, driver = 0): THREE.BufferGeometry {
   const custom = driverParts(driver);
   const seg = quality === 'high' ? 20 : 12;
   const body = new THREE.Color(color);

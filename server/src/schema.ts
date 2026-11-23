@@ -45,6 +45,7 @@ export const PlayerSchema = schema(
     oilTicks: t.uint16(),
     sizePct: t.uint16(),
     ghostFade: t.uint16(),
+    driver: t.uint8(),
     idle: t.boolean(),
   },
   'Player',
