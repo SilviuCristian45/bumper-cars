@@ -25,6 +25,19 @@ export function getCameraMode(): CameraMode {
   return load('camera3d') === 'chase' ? 'chase' : 'tilted';
 }
 
+let minimap: boolean | null = null;
+
+/** The minimap in the corner of a match (masinute.minimap3d, on by default; M toggles it). */
+export function getMinimap(): boolean {
+  minimap ??= load('minimap3d') !== '0';
+  return minimap;
+}
+
+export function setMinimap(on: boolean): void {
+  minimap = on;
+  save('minimap3d', on ? '1' : '0');
+}
+
 /** A "Setări" row that cycles through choices, styled like the dialog's on/off toggles. */
 function choice<T extends string>(label: string, options: readonly [T, string][], get: () => T, set: (value: T) => void): HTMLElement {
   const state = el('span', { class: 'state' });
@@ -50,6 +63,15 @@ export function settingsRows(onQuality: (quality: Quality) => void): HTMLElement
       ],
       getCameraMode,
       (mode) => save('camera3d', mode),
+    ),
+    choice<'on' | 'off'>(
+      isTouch ? 'Hartă mică' : 'Hartă mică (M)',
+      [
+        ['on', 'da'],
+        ['off', 'nu'],
+      ],
+      () => (getMinimap() ? 'on' : 'off'),
+      (value) => setMinimap(value === 'on'),
     ),
   ];
   if (!qualityFromUrl) {

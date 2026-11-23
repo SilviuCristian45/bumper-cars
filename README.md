@@ -129,8 +129,9 @@ mașina ta și poziționat stânga-dreapta), bâlciul în jur (roata mare, cortu
 3D cu artificii, clasamentul și premiile. Opțiunile de test din 2D merg și aici (`?bots=5&seed=abc&botlevel=greu`
 pornește direct un meci local, `?debug` arată hitbox-urile și intențiile boților), plus `?perf`
 (FPS, timp pe cadru, draw calls, triunghiuri, ping online) și `?quality=low|high`. În „Setări”: calitatea grafică
-și camera de la începutul meciului. Tasta C (sau butonul „Cameră”) schimbă camera; în camera din spate joystick-ul
-e rotit după cameră (sus = înainte). Fără HMR: `npm run build:3d`, apoi `npm run preview:3d` → `http://<IP>:4175/3d/`.
+camera de la începutul meciului și harta mică. Tasta C (sau butonul „Cameră”) schimbă camera; în camera din spate joystick-ul
+e rotit după cameră (sus = înainte). Harta mică (jos în dreapta, pe telefon sus lângă butoane; tasta M o ascunde)
+arată ringul văzut de sus, rotit după cameră: mașinile, power-up-urile și bălțile de ulei. Fără HMR: `npm run build:3d`, apoi `npm run preview:3d` → `http://<IP>:4175/3d/`.
 
 ## Publicare
 

@@ -320,3 +320,25 @@ body.touch .podium-panel h2 {
   background: rgba(0, 0, 0, 0.67);
   padding: 1px 2px;
 }
+
+/* Minimap (Minimap.ts): bottom right on desktops; on phones at the top, next to the Cameră / Ieși buttons
+   (the joystick and boost button own the bottom corners). */
+.minimap {
+  position: fixed;
+  z-index: 11;
+  right: calc(var(--sar) + 14px);
+  bottom: calc(var(--sab) + 14px);
+  border-radius: 50%;
+  pointer-events: none;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.6));
+}
+
+body.touch .minimap {
+  bottom: auto;
+  top: calc(var(--sat) + 10px);
+  right: calc(var(--sar) + 104px);
+}
+
+body.touch.chrome-left .minimap {
+  right: calc(var(--sar) + 10px);
+}

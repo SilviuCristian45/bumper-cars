@@ -20,8 +20,9 @@ import { Debug3D } from './Debug3D';
 import { Hud } from './Hud';
 import { KeyboardInput } from './KeyboardInput';
 import { MatchSounds } from './MatchSounds';
+import { Minimap } from './Minimap';
 import { Podium3D } from './Podium3D';
-import { getCameraMode } from './settings3d';
+import { getCameraMode, getMinimap, setMinimap } from './settings3d';
 import type { World } from './World';
 
 export interface MatchOptions {
@@ -39,6 +40,7 @@ export interface MatchOptions {
 export class Match {
   private board: Board;
   private readonly hud: Hud;
+  private readonly minimap: Minimap;
   private readonly sounds: MatchSounds;
   private readonly controls: InputSource;
   private readonly touch: TouchInput | null;
@@ -69,6 +71,7 @@ export class Match {
 
     this.board = new Board(world, transport.playerId);
     this.hud = new Hud(transport.playerId, !isTouch);
+    this.minimap = new Minimap(transport.playerId);
     this.sounds = new MatchSounds(transport.playerId);
     this.debug = opts.debug ? new Debug3D() : null;
     if (this.debug) world.scene.add(this.debug.lines);
@@ -95,6 +98,7 @@ export class Match {
       else if (dialogOpen()) return;
       else if (e.code === 'KeyC') this.world.rig.toggle();
       else if (e.code === 'KeyP') this.togglePause();
+      else if (e.code === 'KeyM') setMinimap(!getMinimap());
       else if (e.key === 'Enter') this.onContinue();
     };
     const onTap = (e: PointerEvent) => {
@@ -116,6 +120,7 @@ export class Match {
       this.unsubscribe();
       this.controls.destroy();
       this.hud.dispose();
+      this.minimap.dispose();
       this.removePodium();
       this.board.dispose();
       if (this.debug) {
@@ -190,6 +195,7 @@ export class Match {
     this.syncPodium(state, dt);
     this.debug?.update(state, this.view, t.playerId, dtMs, t.isPaused(), this.world.rig.camera, t.netStats?.());
     this.hud.update(state, dt, t.isPaused());
+    this.minimap.update(state, this.view, this.world.rig.camera, getMinimap(), dt);
     this.touch?.setBoostReady(this.hud.boostReady(state));
   }
 
