@@ -4,7 +4,7 @@ import { painted, solid, stripes, type Paint } from './paint';
 
 // The drivers: low-poly characters in the seat instead of the plain driver. Each fair bot has its own
 // (a carousel horse, cotton candy, a gingerbread man, a clown, a kid on a swing, a little chain swing
-// ride); players pick any of the fifteen in the lobby (DriverPicker). Pieces are in the car's frame (x forward, y up, z to the right): the seat is at x ≈ -5,
+// ride); players pick any of them in the lobby (DriverPicker). Pieces are in the car's frame (x forward, y up, z to the right): the seat is at x ≈ -5,
 // its top at y = 21, its back at x ≈ -11; everything stays under y ≈ 50 (the name label is above).
 
 const DARK = 0x1d1a22;
@@ -263,6 +263,58 @@ const robot: Builder = () => {
   ];
 };
 
+/** The chat robot: teal tin, a dark visor with two white eyes, a speech bubble with three dots beside its head. */
+const chatRobot: Builder = () => {
+  const teal = 0x10a37f;
+  return [
+    at(new THREE.BoxGeometry(8, 9, 10), teal, -4.5, 26, 0),
+    at(new THREE.BoxGeometry(0.8, 4, 6), WHITE, -0.4, 26.5, 0),
+    ...[-1, 1].map((s) => at(new THREE.BoxGeometry(5, 2, 2), teal, -2, 27, s * 5.8)),
+    at(new THREE.BoxGeometry(7, 6.5, 8.5), 0xe9f5f1, -4, 34.5, 0),
+    at(new THREE.BoxGeometry(0.8, 3, 6.5), DARK, -0.4, 35, 0),
+    ...[-1, 1].map((s) => at(new THREE.SphereGeometry(0.8, 6, 4), WHITE, 0.1, 35, s * 1.7)),
+    at(new THREE.CylinderGeometry(0.35, 0.35, 4, 4), DARK, -4, 39.7, 0),
+    at(new THREE.SphereGeometry(1.2, 6, 4), teal, -4, 42.2, 0),
+    at(new THREE.BoxGeometry(1.5, 5, 8), WHITE, -3, 44, 8.5),
+    at(new THREE.ConeGeometry(1.2, 2.5, 4).rotateX(Math.PI).rotateX(-0.6), WHITE, -3, 41, 6),
+    ...[-1, 0, 1].map((i) => at(new THREE.SphereGeometry(0.6, 5, 3), DARK, -2.1, 44, 8.5 + i * 2.2)),
+  ];
+};
+
+/** The twin robot: blue fading to violet, a round head with a visor, two antennas with gems. */
+const twinRobot: Builder = () => {
+  const fade: Paint = (_x, y) => (y > 1.5 ? 0x9b72cb : y > -1.5 ? 0x6f7fe0 : 0x4285f4);
+  return [
+    at(new THREE.BoxGeometry(8, 9, 10), fade, -4.5, 26, 0),
+    ...[0x4285f4, 0x9b72cb, 0xd96570].map((c, i) => at(new THREE.SphereGeometry(0.6, 5, 3), c, -0.4, 27.3, (i - 1) * 1.6)),
+    ...[-1, 1].map((s) => at(new THREE.BoxGeometry(5, 2, 2), 0x4285f4, -2, 27, s * 5.8)),
+    at(new THREE.SphereGeometry(4.8, 10, 7), 0xe8ecfb, -4, 35, 0),
+    at(new THREE.BoxGeometry(2, 2.6, 6.5), 0x1d1f3a, -0.2, 35.4, 0),
+    ...[-1, 1].map((s) => at(new THREE.BoxGeometry(0.6, 1, 1.4), 0x8ab4f8, 0.9, 35.4, s * 1.6)),
+    ...[-1, 1].map((s) => at(new THREE.CylinderGeometry(0.3, 0.3, 5, 4).rotateX(s * 0.35), DARK, -4, 41, s * 1.8)),
+    ...[-1, 1].map((s) => at(new THREE.OctahedronGeometry(1.9, 0), s < 0 ? 0x4285f4 : 0x9b72cb, -4, 43.8, s * 2.8)),
+  ];
+};
+
+/** The thoughtful robot: terracotta tin, a round cream head, rosy cheeks, an open book in its hands. */
+const bookRobot: Builder = () => {
+  const clay = 0xd97757;
+  const cream = 0xf0e6d8;
+  return [
+    at(new THREE.BoxGeometry(8, 9, 10), clay, -4.5, 26, 0),
+    ...[-1, 1].map((s) => at(new THREE.BoxGeometry(4, 2, 2).rotateY(s * 0.5), clay, -1.5, 28, s * 4.5)),
+    at(new THREE.BoxGeometry(3.6, 0.6, 7.5).rotateZ(0.5), 0x7a3e2a, 0.6, 28.5, 0),
+    ...[-1, 1].map((s) => at(new THREE.BoxGeometry(3.4, 0.6, 3.4).rotateZ(0.5).rotateX(s * 0.15), cream, 0.8, 29, s * 1.85)),
+    at(new THREE.CylinderGeometry(4.6, 4.6, 7, 12), cream, -4, 35, 0),
+    at(new THREE.SphereGeometry(4.6, 12, 4, 0, Math.PI * 2, 0, Math.PI / 2), cream, -4, 38.5, 0),
+    ...[-1, 1].map((s) => at(new THREE.SphereGeometry(0.9, 6, 4).scale(1, 1.4, 1), DARK, 0.3, 36, s * 1.8)),
+    ...[-1, 1].map((s) => at(new THREE.SphereGeometry(0.8, 5, 3), 0xf4a28c, 0.2, 34, s * 3)),
+    at(new THREE.BoxGeometry(0.6, 0.6, 2), DARK, 0.6, 33.4, 0),
+    at(new THREE.CylinderGeometry(0.5, 0.5, 3.5, 5), DARK, -4, 44.5, 0),
+    at(new THREE.SphereGeometry(1.6, 6, 4), clay, -4, 46.8, 0),
+  ];
+};
+
 /** A goldfish from the fair's prize stall, on a splash of water, blowing bubbles. */
 const goldfish: Builder = () => {
   const orange = 0xff7b00;
@@ -303,6 +355,9 @@ const DRIVERS: readonly (Builder | null)[] = [
   magician,
   robot,
   goldfish,
+  chatRobot,
+  twinRobot,
+  bookRobot,
 ];
 if (DRIVERS.length !== DRIVER_COUNT + 1) throw new Error('drivers.ts: one character per DRIVER_COUNT');
 
@@ -319,6 +374,9 @@ export const DRIVER_NAMES: readonly string[] = [
   'Magicianul',
   'Robotelul',
   'Peștișorul de aur',
+  'ChatGPT',
+  'Gemini',
+  'Claude',
 ];
 
 /** The character driving this player's car: the player's pick, a fair bot's own one, or 0 (plain driver). */
