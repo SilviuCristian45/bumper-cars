@@ -58,9 +58,11 @@ export class Hud {
     return me ? 1 - me.boostCooldown / BOOST_COOLDOWN_TICKS : 1;
   }
 
-  update(state: Readonly<GameState>, dt: number, paused: boolean): void {
+  /** watching: a spectator's followed car's name (null for a player); spectators: how many watch the room. */
+  update(state: Readonly<GameState>, dt: number, paused: boolean, watching: string | null = null, spectators = 0): void {
     const me = state.players[this.meId];
-    this.text(this.round, state.phase === 'lobby' ? '' : `Runda ${state.round}/${state.roundsTotal}`);
+    const audience = spectators === 1 ? ' · 1 spectator' : spectators > 1 ? ` · ${spectators} spectatori` : '';
+    this.text(this.round, state.phase === 'lobby' ? '' : `Runda ${state.round}/${state.roundsTotal}${audience}`);
 
     const info = me && me.effect !== PU_NONE ? POWERUP_INFO[me.effect] : undefined;
     this.text(this.effect, info && me ? `${info.name} · ${Math.ceil(me.effectTicks / TICK_RATE)} s` : '');
@@ -76,6 +78,9 @@ export class Hud {
       banner = String(Math.ceil((COUNTDOWN_TICKS - state.roundTick) / TICK_RATE));
     } else if (state.phase === 'playing' && this.startShownFor > 0) {
       banner = 'START!';
+    } else if (watching !== null && state.phase !== 'finished') {
+      const who = watching ? `urmărești pe ${watching}` : 'urmărești meciul';
+      sub = `Spectator: ${who}${isTouch ? '' : ' (← →)'}. Intri și tu din meciul următor.`;
     } else if (state.phase === 'playing' && me && !me.alive) {
       sub = 'Ai ieșit din ring. Aștepți runda următoare…';
     } else if (state.phase === 'intermission') {
@@ -97,7 +102,7 @@ export class Hud {
     const ready = this.boostReady(state);
     this.boostFill.style.transform = `scaleX(${ready.toFixed(3)})`;
     this.boost.classList.toggle('ready', ready >= 1);
-    this.boost.hidden = !this.showBoostBar || state.phase === 'finished';
+    this.boost.hidden = !this.showBoostBar || !me || state.phase === 'finished';
   }
 
   dispose(): void {

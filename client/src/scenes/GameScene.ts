@@ -412,8 +412,10 @@ export class GameScene extends Phaser.Scene {
     this.overlayBg.setVisible(text !== '');
     if (text) this.overlayBg.setSize(Math.max(420, this.overlayText.width + 60), this.overlayText.height + 50);
 
-    const watching = state.phase === 'playing' && me && !me.alive && !text;
-    this.banner.setText(watching ? 'Ai ieșit din ring! Privești runda.' : '');
+    const out = state.phase === 'playing' && me && !me.alive && !text;
+    // A spectator (joined mid-match or into a full room) has no car: the whole ring is in view anyway.
+    const spectator = !me && state.phase !== 'finished' && !text;
+    this.banner.setText(spectator ? 'Ești spectator. Intri și tu din meciul următor.' : out ? 'Ai ieșit din ring! Privești runda.' : '');
   }
 
   /** The podium takes over the screen once the match is over (fanfare on arrival). */
@@ -519,6 +521,7 @@ export class GameScene extends Phaser.Scene {
     const state = this.transport.getState();
     const me = state.players[this.transport.playerId];
     if (state.phase === 'finished') return 'Ieși în meniu?';
+    if (!me) return 'Nu mai urmărești meciul?';
     if (!this.transport.online) return 'Sigur ieși?\nMeciul offline se încheie.';
     if (state.phase === 'playing' && me?.alive) return 'Sigur ieși? Pierzi runda.';
     return 'Sigur ieși?\nRămâi în clasament ca „a ieșit”.';

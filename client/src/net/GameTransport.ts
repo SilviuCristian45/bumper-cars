@@ -12,7 +12,10 @@ export type RoomMessage = Exclude<ClientMessage, { type: 'input' } | { type: 'pi
 export type ConnectionStatus = 'connected' | 'reconnecting' | 'closed';
 
 export interface GameTransport {
-  /** Id of the player controlled from this browser. */
+  /**
+   * Id of the player controlled from this browser. Online it may be missing from the state's players:
+   * a spectator (joined mid-match or into a full room) until a place frees up back in the lobby.
+   */
   readonly playerId: string;
   /** Latest known state. Read-only for the scene. */
   getState(): Readonly<GameState>;
@@ -27,6 +30,8 @@ export interface GameTransport {
   view(): RenderView;
   /** Online: who entered the all-time top or beat their record in the match just finished (empty offline). */
   newRecords(): readonly NewRecord[];
+  /** Online: how many watch the room without a car (MasinuteRoom spectators); 0 offline. */
+  spectators?(): number;
   /** Online only: connection numbers for ?debug. */
   netStats?(): NetStats;
   /** A room on the server, which others can join with its code. */

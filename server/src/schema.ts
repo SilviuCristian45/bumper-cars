@@ -80,6 +80,8 @@ export const RoomState = schema(
     pu1Y: t.int32(),
     pu1Ticks: t.uint16(),
     players: t.map(PlayerSchema),
+    /** Room-side, outside GameState: how many are watching without a car. */
+    spectators: t.uint8(),
   },
   'RoomState',
 );

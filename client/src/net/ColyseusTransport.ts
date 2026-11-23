@@ -219,6 +219,10 @@ export class ColyseusTransport implements GameTransport {
     return this.currentView;
   }
 
+  spectators(): number {
+    return (this.room.state as { spectators?: number } | undefined)?.spectators ?? 0;
+  }
+
   newRecords(): readonly NewRecord[] {
     return this.records;
   }

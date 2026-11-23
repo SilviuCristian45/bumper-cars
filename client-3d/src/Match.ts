@@ -1,4 +1,4 @@
-import { applyGameTuning, type GameEvent, type GameState } from '@masinute/shared';
+import { applyGameTuning, sortedPlayers, type GameEvent, type GameState } from '@masinute/shared';
 import { keepScreenOn } from '@client/device-apis';
 import { isTouch } from '@client/device';
 import { CombinedInput } from '@client/input/CombinedInput';
@@ -55,6 +55,10 @@ export class Match {
   private podium: Podium3D | null = null;
   private readonly debug: Debug3D | null;
   private done = false;
+  /** A spectator (no car of their own, see GameTransport.playerId): the car the camera follows ('' = none yet). */
+  private watched = '';
+  /** "Următorul": the next car to follow, shown to spectators only. */
+  private readonly nextButton: HTMLButtonElement;
 
   constructor(
     private world: World,
@@ -84,7 +88,10 @@ export class Match {
     this.unsubscribe = transport.onEvents((events) => this.events.push(...events));
 
     this.pauseButton = transport.pausable ? button('Pauză', () => this.togglePause(), 'secondary', 'small') : null;
+    this.nextButton = button(isTouch ? 'Următorul' : 'Următorul (→)', () => this.watchNext(1), 'secondary', 'small');
+    this.nextButton.hidden = true;
     const buttons = el('div', { class: `game-buttons${leftHanded ? ' left' : ''}` }, [
+      this.nextButton,
       button(isTouch ? 'Cameră' : 'Cameră (C)', () => this.world.rig.toggle(), 'secondary', 'small'),
       this.pauseButton,
       button(isTouch ? 'Ieși' : 'Ieși (Esc)', () => this.setConfirm(true), 'secondary', 'small'),
@@ -100,6 +107,8 @@ export class Match {
       else if (e.code === 'KeyP') this.togglePause();
       else if (e.code === 'KeyM') setMinimap(!getMinimap());
       else if (e.key === 'Enter') this.onContinue();
+      else if (this.spectating() && (e.code === 'ArrowRight' || e.code === 'KeyD')) this.watchNext(1);
+      else if (this.spectating() && (e.code === 'ArrowLeft' || e.code === 'KeyA')) this.watchNext(-1);
     };
     const onTap = (e: PointerEvent) => {
       if (e.target instanceof HTMLCanvasElement) this.onContinue();
@@ -169,6 +178,12 @@ export class Match {
       return;
     }
     const me = state.players[t.playerId];
+    const spectating = !me;
+    if (spectating) this.keepWatching(state);
+    this.nextButton.hidden = !spectating || state.phase === 'finished';
+    // The camera, the sounds and the HUD follow the own car, or for a spectator the one being watched.
+    const followId = spectating ? this.watched : t.playerId;
+    const followed = state.players[followId];
     this.touch?.setVisible(state.phase === 'playing' && !!me?.alive && !t.isPaused());
     if (this.pauseButton) {
       this.pauseButton.hidden = state.phase !== 'playing' && state.phase !== 'intermission';
@@ -179,8 +194,8 @@ export class Match {
     if (this.events.length > 0) {
       this.board.onEvents(this.events, state);
       this.hud.onEvents(this.events);
-      const own = this.board.cars.carOf(t.playerId);
-      const listener = own && me?.alive && !own.falling ? own.root.position : this.world.rig.look;
+      const own = this.board.cars.carOf(followId);
+      const listener = own && followed?.alive && !own.falling ? own.root.position : this.world.rig.look;
       this.sounds.onEvents(this.events, state, listener, this.world.rig.camera);
       this.events = [];
     }
@@ -188,15 +203,36 @@ export class Match {
     const dt = dtMs / 1000;
     this.board.update(state, this.view, dt);
     this.board.cars.showOwnLabel = this.world.rig.mode === 'tilted';
-    const car = this.board.cars.carOf(t.playerId);
-    const follow = car && me?.alive && !car.falling ? { x: car.root.position.x, z: car.root.position.z, yaw: car.root.rotation.y } : null;
+    const car = this.board.cars.carOf(followId);
+    const follow = car && followed?.alive && !car.falling ? { x: car.root.position.x, z: car.root.position.z, yaw: car.root.rotation.y } : null;
     this.world.rig.update(dt, follow);
     this.world.arena.setNetFromBelow(this.world.rig.mode === 'chase' && !!follow);
     this.syncPodium(state, dt);
     this.debug?.update(state, this.view, t.playerId, dtMs, t.isPaused(), this.world.rig.camera, t.netStats?.());
-    this.hud.update(state, dt, t.isPaused());
+    this.hud.update(state, dt, t.isPaused(), spectating ? (followed?.name ?? '') : null, t.spectators?.() ?? 0);
     this.minimap.update(state, this.view, this.world.rig.camera, getMinimap(), dt);
     this.touch?.setBoostReady(this.hud.boostReady(state));
+  }
+
+  private spectating(): boolean {
+    return !this.transport.getState().players[this.transport.playerId];
+  }
+
+  /** A spectator keeps following a car on the ring: the next one once the watched car is out. */
+  private keepWatching(state: Readonly<GameState>): void {
+    const watched = state.players[this.watched];
+    if (watched && !watched.left && (watched.alive || state.phase !== 'playing')) return;
+    const next = sortedPlayers(state as GameState).find((p) => p.alive && !p.left) ?? sortedPlayers(state as GameState).find((p) => !p.left);
+    this.watched = next?.id ?? '';
+  }
+
+  /** The next (dir 1) or previous (-1) car still on the ring, in slot order. */
+  private watchNext(dir: number): void {
+    const state = this.transport.getState();
+    const cars = sortedPlayers(state as GameState).filter((p) => !p.left && (p.alive || state.phase !== 'playing'));
+    if (cars.length === 0) return;
+    const i = cars.findIndex((p) => p.id === this.watched);
+    this.watched = cars[(i + dir + cars.length) % cars.length]!.id;
   }
 
   /** The podium takes over the ring once the match is over (the fanfare comes from MatchSounds). */
@@ -288,6 +324,7 @@ export class Match {
     const state = this.transport.getState();
     const me = state.players[this.transport.playerId];
     if (state.phase === 'finished') return 'Ieși în meniu?';
+    if (!me) return 'Nu mai urmărești meciul?';
     if (!this.transport.online) return 'Sigur ieși?\nMeciul offline se încheie.';
     if (state.phase === 'playing' && me?.alive) return 'Sigur ieși? Pierzi runda.';
     return 'Sigur ieși?\nRămâi în clasament ca „a ieșit”.';

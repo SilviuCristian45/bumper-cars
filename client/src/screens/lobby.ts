@@ -185,7 +185,9 @@ export class LobbyScreen {
 
   private syncPlayers(state: Readonly<GameState>): void {
     const players = sortedPlayers(state as GameState);
-    setText(this.countText, `Jucători ${players.length}/${MAX_PLAYERS}`);
+    const spectators = this.transport.spectators?.() ?? 0;
+    const audience = spectators === 1 ? ' · 1 spectator' : spectators > 1 ? ` · ${spectators} spectatori` : '';
+    setText(this.countText, `Jucători ${players.length}/${MAX_PLAYERS}${audience}`);
     this.rows.forEach((row, i) => {
       const p = players[i];
       row.avatar.style.visibility = p ? 'visible' : 'hidden';
@@ -234,7 +236,8 @@ export class LobbyScreen {
     this.removeBotButton.disabled = !players.some((p) => p.isBot);
     show(this.startButton, isHost);
     this.startButton.disabled = !canStart(state as GameState, me);
-    if (!isHost) setText(this.hint, 'Așteaptă ca hostul să pornească meciul.');
+    if (!state.players[me]) setText(this.hint, 'Jocul e plin: ești spectator și intri când se eliberează un loc.');
+    else if (!isHost) setText(this.hint, 'Așteaptă ca hostul să pornească meciul.');
     else if (players.length < MIN_PLAYERS_TO_START) setText(this.hint, `Minim ${MIN_PLAYERS_TO_START} mașinuțe pentru Start: adaugă un bot.`);
     else setText(this.hint, '');
   }

@@ -7,6 +7,8 @@ import {
   ERR_ROOM_FULL,
   ERR_SERVER_FULL,
   ERR_TOO_MANY_ROOMS,
+  MAX_PLAYERS,
+  MAX_SPECTATORS,
   ROOM_NAME,
   type RoomStatus,
 } from '@masinute/shared';
@@ -34,6 +36,7 @@ export class RoomError extends Error {
   }
 }
 
+const FULL = `Jocul e plin (${MAX_PLAYERS} mașinuțe și ${MAX_SPECTATORS} spectatori).`;
 const UNREACHABLE = 'Serverul nu răspunde acum. Poți juca offline cu boți.';
 
 const serverUrl = resolveServerUrl(import.meta.env.VITE_SERVER_URL ?? '/colyseus');
@@ -66,7 +69,8 @@ export async function createRoom(name: string): Promise<GameTransport> {
 export async function joinRoom(code: string, name: string): Promise<GameTransport> {
   if (!onlineEnabled) throw new RoomError('Jocul online nu e disponibil în această versiune.', true);
   try {
-    return await connected(getClient().joinById(code, { name }));
+    // A match in progress or a full room: in as a spectator, with a car from the next match on.
+    return await connected(getClient().joinById(code, { name, spectate: true }));
   } catch (err) {
     throw await explain(err, code);
   }
@@ -153,7 +157,7 @@ async function explain(err: unknown, code?: string): Promise<RoomError> {
   const errorCode = typeof err === 'object' && err !== null && 'code' in err ? Number(err.code) : NaN;
   const message = err instanceof Error ? err.message : '';
   if (errorCode === ERR_SERVER_FULL) return new RoomError('Serverul e plin. Încearcă puțin mai târziu sau joacă offline cu boți.', true);
-  if (errorCode === ERR_ROOM_FULL) return new RoomError('Jocul e plin (maxim 6 mașinuțe).');
+  if (errorCode === ERR_ROOM_FULL) return new RoomError(FULL);
   if (errorCode === ERR_IN_PROGRESS) return new RoomError('Meciul e deja în desfășurare. Încearcă după ce se termină.');
   if (errorCode === ERR_RATE_LIMITED) return new RoomError('Prea multe încercări de pe rețeaua ta. Mai așteaptă un minut și încearcă din nou.');
   if (errorCode === ERR_TOO_MANY_ROOMS) {
@@ -163,7 +167,7 @@ async function explain(err: unknown, code?: string): Promise<RoomError> {
   if (code && /not found|disposed|locked/.test(message)) {
     // Colyseus reports a full room and a running match the same way ("locked"); ask the server which.
     const status = await fetchStatus(code);
-    if (status === 'full') return new RoomError('Jocul e plin (maxim 6 mașinuțe).');
+    if (status === 'full') return new RoomError(FULL);
     if (status === 'playing') return new RoomError('Meciul e deja în desfășurare. Încearcă după ce se termină.');
     if (status === 'missing') return new RoomError(`Nu există niciun joc cu codul ${code}.`);
   }

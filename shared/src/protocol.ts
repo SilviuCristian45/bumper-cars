@@ -41,6 +41,9 @@ export interface Pong {
   t: number;
 }
 
+/** Watching a room without a car (joined mid-match or into a full room), besides the MAX_PLAYERS cars. */
+export const MAX_SPECTATORS = 6;
+
 /** Error codes the room rejects joins/creates with (Colyseus ServerError codes). */
 export const ERR_SERVER_FULL = 4001; // too many rooms on the server
 export const ERR_ROOM_FULL = 4002;

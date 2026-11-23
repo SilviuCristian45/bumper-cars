@@ -6,11 +6,13 @@ import {
   BOT_MEDIUM,
   cloneState,
   COUNTDOWN_TICKS,
+  ERR_IN_PROGRESS,
   ERR_ROOM_FULL,
   ERR_SERVER_FULL,
   FP,
   isValidRoomCode,
   MAX_PLAYERS,
+  MAX_SPECTATORS,
   MSG_EVENTS,
   MSG_PONG,
   MSG_RECORDS,
@@ -70,6 +72,11 @@ async function create(name = 'Ana'): Promise<{ client: ClientRoom; room: Masinut
 
 function join(code: string, name = 'Ion'): Promise<ClientRoom> {
   return colyseus.sdk.joinById(code, { name });
+}
+
+/** As the menu joins: a running match or a full room makes a spectator. */
+function watch(code: string, name = 'Vali'): Promise<ClientRoom> {
+  return colyseus.sdk.joinById(code, { name, spectate: true });
 }
 
 /** Sends a message and waits until the room has processed it. */
@@ -145,7 +152,7 @@ describe('MasinuteRoom', () => {
     for (let i = 1; i < MAX_PLAYERS; i++) await join(client.roomId, `P${i}`);
     expect(await status(client.roomId)).toBe('full');
     const err = await rejection(join(client.roomId));
-    expect(err.message).toMatch(/locked/);
+    expect(err.code).toBe(ERR_ROOM_FULL);
   });
 
   it('counts bots against the six places', async () => {
@@ -156,21 +163,71 @@ describe('MasinuteRoom', () => {
     expect(err.code).toBe(ERR_ROOM_FULL);
   });
 
-  it('locks during a match and unlocks back in the lobby', async () => {
+  it('takes spectators during a match, who get a car back in the lobby', async () => {
     const { client, room } = await create();
     await join(client.roomId);
     await send(client, room, 'start');
     expect(game(room).phase).toBe('playing');
-    expect(room.locked).toBe(true);
+    expect(room.locked).toBe(false);
     expect(await status(client.roomId)).toBe('playing');
-    expect((await rejection(join(client.roomId, 'Eva'))).message).toMatch(/locked/);
+    // A client that cannot watch (an old page) is still refused.
+    expect((await rejection(join(client.roomId, 'Eva'))).code).toBe(ERR_IN_PROGRESS);
+
+    const eva = await watch(client.roomId, 'Eva');
+    expect(game(room).players[eva.sessionId]).toBeUndefined();
+    await room.waitForNextPatch();
+    expect(room.state.spectators).toBe(1);
+    // Inputs and lobby actions from a spectator change nothing.
+    skipCountdown(room);
+    eva.send('input', { seq: 1, steer: 100, throttle: 100, boost: true });
+    await room.waitForNextMessage();
+    expect(room['inputQueue'].size(eva.sessionId)).toBe(0);
+    expect(Object.keys(game(room).players)).toHaveLength(2);
 
     game(room).phase = 'finished';
     await send(client, room, 'lobby');
     expect(game(room).phase).toBe('lobby');
-    expect(room.locked).toBe(false);
-    await join(client.roomId, 'Eva');
+    await room.waitForNextTimestep();
+    expect(game(room).players[eva.sessionId]?.name).toBe('Eva');
+    expect(room.state.spectators).toBe(0);
     expect(Object.keys(game(room).players)).toHaveLength(3);
+  });
+
+  it('a full lobby takes spectators until a place frees up, and caps them', async () => {
+    const { client, room } = await create();
+    for (let i = 1; i < MAX_PLAYERS; i++) await send(client, room, 'addBot');
+    const watchers: ClientRoom[] = [];
+    for (let i = 0; i < MAX_SPECTATORS; i++) watchers.push(await watch(client.roomId, `S${i}`));
+    expect(room['spectators'].size).toBe(MAX_SPECTATORS);
+    expect(await status(client.roomId)).toBe('full');
+    expect((await rejection(watch(client.roomId))).code).toBe(ERR_ROOM_FULL);
+
+    // One bot less: the first spectator takes the place.
+    await send(client, room, 'removeBot');
+    await room.waitForNextTimestep();
+    expect(game(room).players[watchers[0]!.sessionId]?.name).toBe('S0');
+    expect(room['spectators'].size).toBe(MAX_SPECTATORS - 1);
+    // A spectator who leaves frees their seat.
+    await watchers[1]!.leave(true);
+    await sleep(50);
+    expect(room['spectators'].size).toBe(MAX_SPECTATORS - 2);
+  });
+
+  it('goes back to the lobby on its own when only spectators are left to see the podium', async () => {
+    const { client, room } = await create();
+    room.hostlessPodiumMs = 100;
+    await send(client, room, 'addBot');
+    await send(client, room, 'start');
+    const eva = await watch(client.roomId, 'Eva');
+    await client.leave(true);
+    await sleep(50);
+    expect(game(room).hostId).toBe('');
+    const bot = Object.values(game(room).players).find((p) => p.isBot)!;
+    await finishMatch(room, bot.id);
+    for (let i = 0; i < 40 && game(room).phase !== 'lobby'; i++) await sleep(25);
+    expect(game(room).phase).toBe('lobby');
+    await room.waitForNextTimestep();
+    expect(game(room).hostId).toBe(eva.sessionId);
   });
 
   it('only lets the host start the match, change rounds or add bots', async () => {

@@ -17,6 +17,7 @@ import {
   LEADERBOARD_MIN_ACTIVE_PERCENT,
   leavePlayer,
   MAX_PLAYERS,
+  MAX_SPECTATORS,
   MSG_EVENTS,
   MSG_PONG,
   MSG_RECORDS,
@@ -51,6 +52,8 @@ import { RoomState } from './schema';
 
 interface JoinOptions {
   name?: unknown;
+  /** The client can watch: a running match (or a full room) makes it a spectator instead of refusing it. */
+  spectate?: unknown;
   /** Set by onAuth from the guard's IP_HEADER (never what the client sent): the limit key, '' outside Caddy. */
   [CLIENT_IP]?: unknown;
 }
@@ -60,6 +63,9 @@ const CLIENT_IP = 'clientIp';
 
 /** Leaderboard matches saved per address today, across all rooms. */
 export const savedMatchesToday = new DailyQuota(LEADERBOARD_MATCHES_PER_IP_PER_DAY);
+
+/** A finished match nobody can send back to the lobby (no human player left, only spectators): it goes back on its own after this long. */
+export const HOSTLESS_PODIUM_MS = 15_000;
 
 /** The limit key onAuth put in the options. */
 function clientIpOf(options: JoinOptions | undefined): string {
@@ -87,6 +93,16 @@ export class MasinuteRoom extends Room<{ state: RoomState }> {
   private readonly lastInputTick = new Map<string, number>();
   /** Per human, this match: ticks on the ring after the countdown, and of those the ones they were driving. */
   private readonly activity = new Map<string, { onRing: number; driving: number }>();
+  /**
+   * Watching, by session id (in join order): joined during a match or into a full room. They get the
+   * state like everyone (RoomState.spectators counts them) but have no car; back in the lobby each one
+   * takes a free place (promoteSpectators), the rest keep watching.
+   */
+  private readonly spectators = new Map<string, string>();
+  /** Back to the lobby on its own: a finished match without a human player to press the button. */
+  private hostlessPodium: Delayed | undefined;
+  /** A field so tests can shorten it. */
+  hostlessPodiumMs = HOSTLESS_PODIUM_MS;
 
   /**
    * Runs for every create/join request, before the room exists for a create. Only stamps the options
@@ -110,7 +126,8 @@ export class MasinuteRoom extends Room<{ state: RoomState }> {
     // Out of the public listing: only someone with the code (joinById) finds the room.
     void this.setPrivate(true);
 
-    this.maxClients = MAX_PLAYERS;
+    // Bots take places but no connection: six cars at most, plus the spectators.
+    this.maxClients = MAX_PLAYERS + MAX_SPECTATORS;
     this.autoDispose = true;
     this.maxMessagesPerSecond = MAX_MESSAGES_PER_SECOND;
 
@@ -122,7 +139,7 @@ export class MasinuteRoom extends Room<{ state: RoomState }> {
       if (this.game.phase !== 'playing') return;
       const input = parseInput(msg);
       // The player id always comes from the connection, never from the message.
-      if (!input) return;
+      if (!input || !this.game.players[client.sessionId]) return;
       this.inputQueue.push(client.sessionId, input);
       this.lastInputTick.set(client.sessionId, this.game.tick);
     });
@@ -160,12 +177,10 @@ export class MasinuteRoom extends Room<{ state: RoomState }> {
       if (!startMatch(this.game, client.sessionId)) return;
       this.lobbyTimer?.clear();
       this.activity.clear();
-      await this.lock();
     });
-    this.onMessage('lobby', async (client) => {
-      if (!backToLobby(this.game, client.sessionId)) return;
-      this.armLobbyTimer();
-      await this.unlock();
+    // The room is never locked: a match in progress takes spectators (onJoin), and onJoin refuses the rest.
+    this.onMessage('lobby', (client) => {
+      if (backToLobby(this.game, client.sessionId)) this.armLobbyTimer();
     });
     // Online a round may be fast-forwarded only by the host, and only once every human is out.
     this.onMessage('skipRound', (client) => {
@@ -198,10 +213,15 @@ export class MasinuteRoom extends Room<{ state: RoomState }> {
     const name = typeof options?.name === 'string' ? options.name : '';
     const result = addPlayer(this.game, client.sessionId, name);
     if (!result.ok) {
-      if (result.reason === 'in-progress') throw new ServerError(ERR_IN_PROGRESS, 'Meciul e în desfășurare');
-      throw new ServerError(ERR_ROOM_FULL, 'Jocul e plin');
+      const canWatch = options?.spectate === true && (result.reason === 'in-progress' || result.reason === 'full');
+      if (!canWatch || this.spectators.size >= MAX_SPECTATORS) {
+        if (result.reason === 'in-progress') throw new ServerError(ERR_IN_PROGRESS, 'Meciul e în desfășurare');
+        throw new ServerError(ERR_ROOM_FULL, 'Jocul e plin');
+      }
+      this.spectators.set(client.sessionId, name);
     }
     this.clientIps.set(client.sessionId, clientIpOf(options));
+    this.state.spectators = this.spectators.size;
     mirror(this.game, this.state);
   }
 
@@ -222,6 +242,8 @@ export class MasinuteRoom extends Room<{ state: RoomState }> {
   onLeave(client: Client): void {
     this.pendingEvents.push(...leavePlayer(this.game, client.sessionId));
     this.inputQueue.remove(client.sessionId);
+    this.spectators.delete(client.sessionId);
+    this.state.spectators = this.spectators.size;
   }
 
   onDispose(): void {
@@ -230,8 +252,10 @@ export class MasinuteRoom extends Room<{ state: RoomState }> {
 
   /** Read by GET /rooms/:code to explain why a join was refused. */
   status(): RoomStatus {
+    const carsFull = Object.keys(this.game.players).length >= MAX_PLAYERS;
+    if (this.spectators.size >= MAX_SPECTATORS && (carsFull || this.game.phase !== 'lobby')) return 'full';
     if (this.game.phase !== 'lobby') return 'playing';
-    return Object.keys(this.game.players).length >= MAX_PLAYERS ? 'full' : 'open';
+    return carsFull ? 'full' : 'open';
   }
 
   private tick(): void {
@@ -240,6 +264,8 @@ export class MasinuteRoom extends Room<{ state: RoomState }> {
     // Inputs only count while a round is being played; nothing moves in the lobby.
     if (this.game.phase !== 'playing') this.inputQueue.clear();
     if (this.game.phase !== 'lobby') events.push(...runTick(this.game, this.inputQueue.take()));
+    this.watchHostlessPodium();
+    this.promoteSpectators();
     this.trackActivity();
     mirror(this.game, this.state);
     // The patch first: clients hold a tick's events until their state has reached it.
@@ -247,6 +273,31 @@ export class MasinuteRoom extends Room<{ state: RoomState }> {
     if (events.length > 0) this.broadcast(MSG_EVENTS, { tick: this.game.tick, events } satisfies TickEvents);
     // matchEnd happens once per match, from a tick or from a skipped round (sent with this tick).
     if (events.some((e) => e.type === 'matchEnd')) this.saveMatch();
+  }
+
+  /** In the lobby, spectators take the free places in the order they came (the first human becomes host). */
+  private promoteSpectators(): void {
+    if (this.game.phase !== 'lobby' || this.spectators.size === 0) return;
+    for (const [id, name] of this.spectators) {
+      if (!addPlayer(this.game, id, name).ok) break;
+      this.spectators.delete(id);
+    }
+    this.state.spectators = this.spectators.size;
+  }
+
+  /** A podium with nobody to press "Înapoi în lobby" (every human player gone, spectators left) ends on its own. */
+  private watchHostlessPodium(): void {
+    const stuck = this.game.phase === 'finished' && !this.game.hostId && this.spectators.size > 0;
+    if (!stuck) {
+      this.hostlessPodium?.clear();
+      this.hostlessPodium = undefined;
+      return;
+    }
+    this.hostlessPodium ??= this.clock.setTimeout(() => {
+      this.hostlessPodium = undefined;
+      // With no host, hostId is '' and so is the sender here.
+      if (backToLobby(this.game, '')) this.armLobbyTimer();
+    }, this.hostlessPodiumMs);
   }
 
   /**
