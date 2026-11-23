@@ -16,7 +16,7 @@ export function phaserHost(scene: Phaser.Scene): ScreenHost {
     mount: (className, children) => mountScreen(scene, className, children),
     avatarUrl: (slot) => avatarUrl(scene.game, slot),
     openSettings: () => openSettings(),
-    cornerToggles: ['music', 'reducedEffects'],
+    cornerToggles: ['reducedEffects'],
     settingsOnDesktop: false,
     otherClient: '3d',
   };

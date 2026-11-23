@@ -1,14 +1,18 @@
+import { getSetting, onSettingChange, setSetting } from '../settings';
 import { el } from './el';
 import { isTyping } from './html';
 import { fullscreenAvailable, isFullscreen, onFullscreenChange, toggleFullscreen } from './fullscreen';
 
-// Sound and fullscreen toggles in the top-right corner, over every screen from the intro on
-// (F also toggles fullscreen).
+// Music, sound and fullscreen toggles in the top-right corner, over every screen from the intro on
+// (F also toggles fullscreen). The music one is the "Muzică" setting: only the song, the effects stay.
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 const SPEAKER = '<path d="M4 11h6l6-7v24l-6-7H4z" fill="#fff4d6"/>';
+const NOTE = '<path d="M12 23V8l14-3v15" stroke="#fff4d6" stroke-width="2.5" fill="none"/><circle cx="9" cy="23" r="3.5" fill="#fff4d6"/><circle cx="23" cy="20" r="3.5" fill="#fff4d6"/>';
 const ICONS = {
+  musicOn: NOTE,
+  musicOff: `${NOTE}<path d="M5 5l22 22" stroke="#ff8fa3" stroke-width="3"/>`,
   soundOn: `${SPEAKER}<path d="M20 11a7 7 0 0 1 0 10M23 6.5a13 13 0 0 1 0 19" stroke="#fff4d6" stroke-width="2" fill="none"/>`,
   soundOff: `${SPEAKER}<path d="M20 11l9 10M29 11l-9 10" stroke="#ff8fa3" stroke-width="3"/>`,
   // Four corner brackets, at the edges (enter) or folded toward the middle (exit).
@@ -31,6 +35,23 @@ export interface SoundToggle {
 
 export function initChrome(sound?: SoundToggle): void {
   const bar = el('div', { class: 'chrome' });
+  const music = el('button', { class: 'icon-btn', attrs: { type: 'button' } });
+  const syncMusic = () => {
+    const on = getSetting('music');
+    music.replaceChildren(icon(on ? ICONS.musicOn : ICONS.musicOff));
+    music.setAttribute('aria-label', on ? 'Oprește muzica' : 'Pornește muzica');
+    music.title = on ? 'Oprește muzica' : 'Pornește muzica';
+  };
+  music.addEventListener('click', () => {
+    setSetting('music', !getSetting('music'));
+    music.blur();
+  });
+  // Also switched from "Setări".
+  onSettingChange((key) => {
+    if (key === 'music') syncMusic();
+  });
+  syncMusic();
+  bar.append(music);
   if (sound) {
     const mute = el('button', { class: 'icon-btn', attrs: { type: 'button' } });
     const syncMute = () => {

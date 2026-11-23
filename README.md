@@ -83,7 +83,7 @@ Efectele și muzica sunt generate cu Web Audio. Oricare poate fi înlocuit punâ
 
 | Fișier | Când se aude |
 |---|---|
-| `muzica.ogg` | muzica de bâlci, în buclă, încet (generată: un vals de orgă de carusel) |
+| `muzica.ogg` | muzica, în buclă, încet: acum `muzica.mp3` = colinda „Rămâi cu noi în seara asta” (fără fișier: un vals de orgă de carusel generat) |
 | `bonk.ogg` | două mașini se lovesc (mai tare la o lovitură mai puternică) |
 | `boost.ogg` | boost |
 | `iesire.ogg` | o mașină iese din ring |
@@ -102,7 +102,7 @@ Efectele și muzica sunt generate cu Web Audio. Oricare poate fi înlocuit punâ
 | `flex.ogg` | e luată Pudra proteică |
 | `fantoma.ogg` | e luată Fantoma |
 
-Butonul de sunet le oprește pe toate, muzica inclusiv.
+Butonul de sunet le oprește pe toate, muzica inclusiv; butonul cu nota muzicală de lângă el oprește doar muzica (la fel ca „Muzică” din Setări).
 
 ## Opțiuni de test în URL
 

@@ -8,6 +8,8 @@
 *.gif binary
 *.webp binary
 *.ico binary
+*.mp3 binary
+*.ogg binary
 *.ogg binary
 *.mp3 binary
 *.wav binary

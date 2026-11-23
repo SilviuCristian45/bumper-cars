@@ -122,7 +122,7 @@ export class App {
       avatarUrl: carAvatar,
       driverPicker: (transport) => driverPicker(life, transport),
       openSettings: () => openSettings({ extra: settingsRows((q) => this.setQuality(q)) }),
-      cornerToggles: ['music', 'reducedEffects'],
+      cornerToggles: ['reducedEffects'],
       settingsOnDesktop: true,
       otherClient: '2d',
     };

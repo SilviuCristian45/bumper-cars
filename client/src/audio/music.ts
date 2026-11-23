@@ -2,13 +2,16 @@ import { getSetting, onSettingChange } from '../settings';
 import { fetchFirst } from './files';
 import type { AudioOut } from './output';
 
-// The fair music: a carousel-organ waltz (3/4, "oom-pah-pah" bass under a staccato melody),
-// generated with Web Audio and looped, quiet under the sound effects. A file in
-// client/public/audio/ (muzica.ogg, else muzica.mp3) replaces it and loops instead.
+// The fair music: a file in client/public/audio/ (muzica.ogg, else muzica.mp3; now the carol
+// "Rămâi cu noi în seara asta") looped under the sound effects, or, without one, a carousel-organ
+// waltz (3/4, "oom-pah-pah" bass under a staccato melody) generated with Web Audio. The file is
+// fetched only once the music is first wanted (it is a few MB); nothing plays while it loads.
 // It goes through the output's destination (Phaser's master gain in 2D), so the sound button silences
 // it too; the "Muzică" setting turns it on or off at once. The context is suspended while the tab is hidden.
 
 const VOLUME = 0.12;
+/** A mixed song is much louder than the generated organ notes at the same gain. */
+const FILE_VOLUME = 0.3;
 /** Quarter note at ~168 bpm. */
 const BEAT = 60 / 168;
 /** Notes are scheduled this far ahead, every TICK_MS (a hidden tab's timers may be slow). */
@@ -44,6 +47,8 @@ const CHORDS = { C: { root: 0, upper: [4, 7] }, F: { root: 5, upper: [9, 12] }, 
 let ctx: AudioContext | null = null;
 let gain: GainNode | null = null;
 let file: AudioBuffer | null = null;
+/** The file: not asked for yet, on its way, or settled (file set, or null = play the generated waltz). */
+let fileState: 'idle' | 'loading' | 'done' = 'idle';
 let fileSource: AudioBufferSourceNode | null = null;
 let nextBeatAt = 0;
 let beat = 0;
@@ -55,9 +60,6 @@ export function initMusic(out: AudioOut | null): void {
   gain = ctx.createGain();
   gain.gain.value = VOLUME;
   gain.connect(destination);
-  void fetchFirst(ctx, ['audio/muzica.ogg', 'audio/muzica.mp3']).then((buffer) => {
-    file = buffer;
-  });
   onSettingChange((key, on) => {
     if (key === 'music' && !on) stop();
   });
@@ -69,12 +71,23 @@ function tick(): void {
   if (!ctx || !gain) return;
   // Before the first click (and while the tab is hidden) the context is suspended.
   if (!getSetting('music') || ctx.state !== 'running') return;
+  if (fileState !== 'done') {
+    if (fileState === 'idle') {
+      fileState = 'loading';
+      void fetchFirst(ctx, ['audio/muzica.ogg', 'audio/muzica.mp3']).then((buffer) => {
+        file = buffer;
+        fileState = 'done';
+      });
+    }
+    return;
+  }
   if (file) {
     if (!fileSource) {
       fileSource = ctx.createBufferSource();
       fileSource.buffer = file;
       fileSource.loop = true;
       fileSource.connect(gain);
+      gain.gain.value = FILE_VOLUME;
       fileSource.start();
     }
     return;
